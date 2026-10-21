@@ -91,6 +91,36 @@ return [
         'min_similarity' => (float) env('IMAGE_SEARCH_MIN_SIMILARITY', 0.45),
         'max_results' => (int) env('IMAGE_SEARCH_MAX_RESULTS', 8),
         'max_upload_kb' => (int) env('IMAGE_SEARCH_MAX_UPLOAD_KB', 2048),
+
+        /*
+         * IntegrasI YOLOv8 → integrasi YOLOv8 (layanan inferensi Python terpisah — ai-service/server.py).
+         *
+         *   driver             : 'hybrid' = deteksi YOLO dulu; selama layanan
+         *                         menjawab, keputusan (recognized / not_atk /
+         *                         uncertain) dipercayakan ke YOLO. Bila layanan
+         *                         mati ATAU balasan tidak valid, sistem otomatis
+         *                         memakai mesin pengenalan bawaan (k-NN fitur GD)
+         *                         sehingga fitur tidak pernah ikut mati.
+         *                         'gd' = hanya mesin bawaan, tanpa panggilan HTTP.
+         *   service_url        : POST {service_url}/detect (kosongkan = nonaktif).
+         *   yolo_min_confidence: ambang keyakinan deteksi — nilai default WAJIB
+         *                         mengikuti hasil sweep pada ai-service/models/metrics.json
+         *                         (dihasilkan `python ai-service/evaluate.py` pada split test),
+         *                         bukan angka tebakan.
+         *   yolo_min_margin    : selisih skor kelas terbaik vs runner-up (kosisten
+         *                         dengan aturan mesin bawaan).
+         *
+         *   Default saat ini = hasil sweep evaluasi split test (304 gambar,
+         *   metrics.json): conf 0.80 → atk_precision 0.9065 @ coverage 0.8487
+         *   (aturan pemilihan: presisi ≥ 0.90 dengan cakupan tertinggi).
+         *   Perbarui keduanya bersamaan bila model/dataset dilatih ulang.
+         */
+        'driver' => (string) env('IMAGE_SEARCH_DRIVER', 'hybrid'),
+        'service_url' => env('IMAGE_SEARCH_SERVICE_URL', 'http://127.0.0.1:8090'),
+        'service_timeout' => (float) env('IMAGE_SEARCH_SERVICE_TIMEOUT', 10),
+        'service_connect_timeout' => (float) env('IMAGE_SEARCH_SERVICE_CONNECT_TIMEOUT', 2),
+        'yolo_min_confidence' => (float) env('IMAGE_SEARCH_YOLO_MIN_CONFIDENCE', 0.80),
+        'yolo_min_margin' => (float) env('IMAGE_SEARCH_YOLO_MIN_MARGIN', 0.00),
     ],
 
 ];

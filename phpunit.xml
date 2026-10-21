@@ -25,6 +25,10 @@
         <!-- Kunci API AI selalu kosong saat testing: AIService memakai fallback
              mock berbasis database sehingga suite tidak pernah memanggil API eksternal. -->
         <env name="AI_API_KEY" value=""/>
+        <!-- Pencarian visual: selama suite memakai mesin pengenalan bawaan (gd)
+             agar tidak pernah menghubungi layanan Python eksternal; tes integrasi
+             YOLO mengaktifkan driver hybrid sendiri lewat Http::fake(). -->
+        <env name="IMAGE_SEARCH_DRIVER" value="gd"/>
         <!-- Notifikasi nonaktif & kredensial kosong saat testing: observer notifikasi
              tidak pernah mengirim email/pesan eksternal apa pun selama suite berjalan. -->
         <env name="NOTIFICATIONS_ENABLED" value="false"/>

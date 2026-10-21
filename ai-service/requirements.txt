@@ -1,0 +1,13 @@
+# Dependensi layanan visusi Agung ATK (deteksi ATK / YOLOv8).
+#
+# PASANG DALAM DUA LANGKAH (torch versi CPU agar ringan, lihat README):
+#   1. python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   2. python -m pip install -r ai-service/requirements.txt
+#
+# torch/torchvision TIDAK dicantumkan di sini agar langkah (1) tidak tertimpa
+# torch versi CUDA (berat > 2 GB).
+ultralytics>=8.3.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pillow>=10.0.0
+python-multipart>=0.0.9

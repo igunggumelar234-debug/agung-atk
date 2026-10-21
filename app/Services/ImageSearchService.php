@@ -66,6 +66,30 @@ class ImageSearchService
             'keywords' => ['tempat kertas', 'tray', 'dokumen', 'arsip'],
             'categories' => ['Perlengkapan Meja & Kantor', 'Pengarsipan & Map'],
         ],
+        'pencil' => [
+            'keywords' => ['pensil', 'pencil'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
+        'eraser' => [
+            'keywords' => ['penghapus', 'eraser'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
+        'ruler' => [
+            'keywords' => ['penggaris', 'ruler'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
+        'highlighter' => [
+            'keywords' => ['stabilo', 'highlighter'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
+        'marker' => [
+            'keywords' => ['spidol', 'marker'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
+        'compass' => [
+            'keywords' => ['jangka'],
+            'categories' => ['Alat Tulis & Menggambar'],
+        ],
     ];
 
     /**

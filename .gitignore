@@ -27,3 +27,8 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /storage/backups/
+# Artefak Python / layanan visi (bobot dilatih ulang via ai-service/train.py)
+__pycache__/
+/ai-service/runs/
+/ai-service/models/*.pt
+/yolov8n.pt

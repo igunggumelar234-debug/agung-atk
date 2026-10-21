@@ -69,6 +69,7 @@ class ImageSearchController extends Controller
                 'label' => $result['label'],
                 'label_name' => $result['label_name'],
                 'confidence' => $result['confidence'],
+                'engine' => $result['engine'] ?? null,
                 'message' => $message,
                 'products' => $products,
             ]);
@@ -80,6 +81,7 @@ class ImageSearchController extends Controller
                 'label' => $result['label'],
                 'label_name' => $result['label_name'],
                 'confidence' => $result['confidence'],
+                'engine' => $result['engine'] ?? null,
                 'message' => ATKImageRecognitionService::MESSAGE_NOT_RECOGNIZED,
                 'products' => [],
             ]);
@@ -91,6 +93,7 @@ class ImageSearchController extends Controller
             'label' => null,
             'label_name' => null,
             'confidence' => $result['confidence'],
+            'engine' => $result['engine'] ?? null,
             'message' => ATKImageRecognitionService::MESSAGE_NOT_RECOGNIZED,
             'products' => [],
         ]);
