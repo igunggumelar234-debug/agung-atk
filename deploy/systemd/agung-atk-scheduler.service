@@ -1,0 +1,25 @@
+# =============================================================================
+# systemd — Scheduler Agung ATK (jalankan SATU mekanisme: ini ATAU cron)
+# =============================================================================
+# Cara pakai:
+#   1. Salin ke /etc/systemd/system/agung-atk-scheduler.service
+#   2. sudo systemctl daemon-reload
+#   3. sudo systemctl enable --now agung-atk-scheduler
+# =============================================================================
+
+[Unit]
+Description=Agung ATK - Task Scheduler (ringkasan harian & pruning)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/agungatkopencode
+ExecStart=/usr/bin/php /var/www/agungatkopencode/artisan schedule:work
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

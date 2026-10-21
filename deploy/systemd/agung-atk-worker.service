@@ -1,0 +1,31 @@
+# =============================================================================
+# systemd — Queue Worker Agung ATK (Debian/Ubuntu/RHEL tanpa Supervisor)
+# =============================================================================
+# Cara pakai:
+#   1. Salin ke /etc/systemd/system/agung-atk-worker.service
+#      (sesuaikan path & User=)
+#   2. sudo systemctl daemon-reload
+#   3. sudo systemctl enable --now agung-atk-worker
+#   4. sudo systemctl status agung-atk-worker
+# Setelah deploy: sudo systemctl restart agung-atk-worker
+# =============================================================================
+
+[Unit]
+Description=Agung ATK - Queue Worker (notifikasi & job latar belakang)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/agungatkopencode
+ExecStart=/usr/bin/php /var/www/agungatkopencode/artisan queue:work database --tries=3 --max-time=3600 --sleep=3
+ExecStop=/bin/kill -s TERM $MAINPID
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
