@@ -225,6 +225,29 @@ curl.exe -X POST http://127.0.0.1:8899/image-search -F "image=@contoh-pulpen.jpg
 Otomatisasi regression: `tests/Feature/YoloImageSearchTest.php` (Http::fake —
 tidak butuh layanan hidup), jalankan `php artisan test --compact --filter=YoloImageSearchTest`.
 
+## Auto-start di Windows (selalu aktif tanpa diperintah)
+
+Agar aplikasi selalu hidup setiap komputer login, tanpa perintah manual:
+
+* **`keep-alive.ps1`** — loop 10 detik: bila port 8090 (layanan visi),
+  8899 (Laravel dev), atau 3306 (MySQL Laragon) kosong **dan** tidak ada
+  proses yang sedang memulainya, prosesnya dinyalakan kembali. Guard proses
+  mencegah start ganda (aman bila kejalur dua kali). Aksi dicatat di
+  `storage/logs/keep-alive.log`.
+* Pemicunya: **scheduled task `AgungATK-KeepAlive`** (trigger logon, mode
+  interactive, tersembunyi — dibuat tanpa hak admin). Catatan: Windows Script
+  Host mesin ini dinonaktifkan (`HKCU ...\Windows Script Host\Settings\Enabled=0`)
+  sehingga `.vbs` di folder Startup tidak berfungsi; karena itu dipakai Task
+  Scheduler, bukan VBS.
+* **Pasang di mesin lain**:
+  `powershell -ExecutionPolicy Bypass -File ai-service\install-autostart.ps1`
+  (membuat task; otomatis fallback ke shortcut `.lnk` di folder Startup bila
+  pembuatan task ditolak, lalu menjalankan keep-alive untuk sesi berjalan).
+* **Berhenti sementara** (akan nyala lagi saat login berikutnya): jalankan
+  `ai-service/stop-agungatk.bat`.
+* **Nonaktif permanen**: `schtasks /Delete /TN AgungATK-KeepAlive /F`,
+  lalu jalankan `stop-agungatk.bat`.
+
 ## Troubleshooting
 
 | Gejala | Penyebab → tindakan |
