@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<title>Dokumen Gabungan Agung ATK — PRD/SRS, SDD, Testing &amp; CI/CD</title>
+<style>
+@page { size: A4; margin: 18mm 14mm; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11.5px; line-height: 1.55; color: #1a1a1a; max-width: 100%; }
+h1 { font-size: 22px; border-bottom: 3px solid #2f6fed; padding-bottom: 6px; color: #12306e; page-break-after: avoid; }
+h2 { font-size: 16px; color: #1e40af; border-bottom: 1px solid #dbe4ff; padding-bottom: 3px; margin-top: 26px; page-break-after: avoid; }
+h3, h4 { font-size: 13px; color: #334155; margin-top: 16px; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5px; page-break-inside: auto; }
+th, td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; vertical-align: top; }
+th { background: #eef4ff; }
+tr { page-break-inside: avoid; }
+code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-family: Consolas, monospace; font-size: 10px; }
+pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; white-space: pre-wrap; font-size: 10px; page-break-inside: avoid; }
+blockquote { border-left: 4px solid #2f6fed; background: #f5f8ff; margin: 10px 0; padding: 8px 14px; color: #334155; }
+hr { border: none; border-top: 2px solid #2f6fed; margin: 28px 0; page-break-before: always; }
+img { max-width: 100%; }
+a { color: #1d4ed8; text-decoration: none; }
+.cover { text-align: center; padding-top: 90px; page-break-after: always; }
+.cover h1 { font-size: 30px; border: none; }
+.cover .sub { font-size: 16px; color: #475569; margin-top: 10px; }
+.cover .meta { margin-top: 40px; font-size: 13px; color: #64748b; }
+</style></head><body>
+<div class="cover">
+  <h1>AGUNG ATK</h1>
+  <div class="sub">Sistem Informasi Penjualan Toko Jual Beli Alat Tulis Kerja Berbasis Web
+  dengan Integrasi Artificial Intelligence (AI) di Kabupaten Kuningan</div>
+  <div class="meta">
+    Dokumen Gabungan: PRD/SRS · SDD (Arsitektur, UML, UI/UX) · Testing &amp; CI/CD<br>
+    Mata Kuliah Rekayasa Perangkat Lunak (TIKB2503021) — STMIK IKMI Cirebon<br>
+    Versi 1.0 — 15 November 2026<br><br>
+    Nama: [NAMA MAHASISWA] · NIM: [NIM] · Kelompok: [KELOMPOK]
+  </div>
+</div>
+<h1>PRD / SRS — Agung ATK</h1>
+<h1>PRD / SRS — AGUNG ATK</h1>
+<p><strong>Produk:</strong> Sistem Informasi Penjualan Toko Jual Beli Alat Tulis Kerja Berbasis Web dengan Integrasi Artificial Intelligence (AI) di Kabupaten Kuningan
+<strong>Versi dokumen:</strong> 1.0 — 15 November 2026
+<strong>Metode acuan:</strong> IEEE 830 (Recommended Practice for Software Requirements Specifications) dan ISO/IEC/IEEE 29148
+<strong>Status:</strong> Seluruh kebutuhan dalam dokumen ini dipetakan dari <strong>implementasi nyata</strong> di workspace. Bagian yang menunggu kredensial eksternal ditandai eksplisit.</p>
+<hr>
+<h2>1. Pendahuluan</h2>
+<h3>1.1 Tujuan dokumen</h3>
+<p>Dokumen ini merumuskan kebutuhan fungsional dan nonfungsional sistem <strong>Agung ATK</strong> secara terukur dan dapat diuji, menjadi acuan pengembangan, pengujian, dan penilaian proyek akhir.</p>
+<h3>1.2 Ruang lingkup dokumen</h3>
+<p>Mencakup seluruh fitur aplikasi web penjualan ATK: katalog, transaksi, pengiriman, manajemen peran, integrasi AI (chatbot &amp; pencarian gambar), notifikasi multi-kanal, serta keamanan — sesuai kondisi implementasi aktual per 15 November 2026.</p>
+<h3>1.3 Definisi, akronim, referensi</h3>
+<table>
+<thead>
+<tr>
+<th>Istilah</th>
+<th>Arti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ATK</td>
+<td>Alat Tulis Kerja</td>
+</tr>
+<tr>
+<td>AI</td>
+<td>Artificial Intelligence</td>
+</tr>
+<tr>
+<td>YOLOv8</td>
+<td><em>You Only Look Once</em> versi 8 — model deteksi objek (implementasi nyata: <code>ai-service/</code>)</td>
+</tr>
+<tr>
+<td>Cloud API</td>
+<td>REST API resmi WhatsApp Business milik Meta</td>
+</tr>
+<tr>
+<td>Bot API</td>
+<td>REST API resmi Telegram</td>
+</tr>
+<tr>
+<td>Role</td>
+<td>Peran pengguna: Admin, Anggota, Kurir, Pelanggan</td>
+</tr>
+<tr>
+<td>Intent</td>
+<td>Pola maksud pertanyaan chatbot yang dipetakan ke operasi baca-data terbatas</td>
+</tr>
+</tbody>
+</table>
+<p>Referensi: IEEE 830-1998; ISO/IEC/IEEE 29148:2018; Dokumentasi Laravel 13; Dokumentasi Meta WhatsApp Cloud API; Dokumentasi Telegram Bot API.</p>
+<hr>
+<h2>2. Latar Belakang Masalah Nyata</h2>
+<p>Toko Alat Tulis Kerja (ATK) di Kabupaten Kuningan umumnya mengelola ratusan item dengan karakteristik serupa (buku, pulpen, kertas dengan varian tipe/merk), sehingga muncul masalah nyata:</p>
+<ol>
+<li><strong>Pencarian barang lambat</strong> — pembeli/pegawai harus menelusuri rak atau bertanya langsung; varian produk sering tertukar.</li>
+<li><strong>Stok sulit dipantau</strong> — pencatatan manual membuat keputusan pembelian ulang terlambat, barang laku terjual habis tanpa terdeteksi.</li>
+<li><strong>Pesanan &amp; pembayaran tidak terlacak</strong> — pembeli tidak tahu status pesanan; verifikasi bukti transfer manual memakan waktu.</li>
+<li><strong>Pengiriman tidak terdokumentasi</strong> — penugasan kurir dan status paket hanya lewat pesan singkat, tidak ada jejak audit.</li>
+<li><strong>Komunikasi terputus</strong> — informasi stok/penjualan harian hanya diketahui pemilik saat toko buka.</li>
+<li><strong>Keterbatasan tenaga</strong> — pertanyaan repetitif (harga, ketersediaan, status pesanan) menghabiskan waktu pegawai.</li>
+</ol>
+<p>Integrasi AI diarahkan pada dua kebutuhan nyata: <strong>asisten tanya-jawab</strong> yang memahami aplikasi &amp; data toko, dan <strong>pencarian produk lewat foto</strong> barang yang dilihat pembeli.</p>
+<hr>
+<h2>3. Identifikasi Masalah</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Masalah</th>
+<th>Dampak</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M1</td>
+<td>Tidak ada katalog digital terstruktur</td>
+<td>Produk sulit ditemukan, perbandingan harga tidak bisa</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>Stok tidak terekam real-time</td>
+<td>Kehilangan penjualan &amp; kelebihan pembelian</td>
+</tr>
+<tr>
+<td>M3</td>
+<td>Alur pesanan-pembayaran-pengiriman tidak terintegrasi</td>
+<td>Salah kirim, sengketa status, hilang jejak</td>
+</tr>
+<tr>
+<td>M4</td>
+<td>Tidak ada pemisahan hak akses jelas</td>
+<td>Risiko data bocor antar pihak (pembeli vs pegawai)</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>Tidak ada pencatatan aktivitas</td>
+<td>Kesalahan sulit ditelusuri</td>
+</tr>
+<tr>
+<td>M6</td>
+<td>Tidak ada kanal informasi otomatis</td>
+<td>Pemilik/pegawai telat menerima info penting</td>
+</tr>
+<tr>
+<td>M7</td>
+<td>Pencarian barang hanya manual/teks</td>
+<td>Pembeli tidak tahu nama produk yang dicari</td>
+</tr>
+<tr>
+<td>M8</td>
+<td>Pertanyaan repetitif dilayani manual</td>
+<td>Waktu pegawai terbuang untuk hal rutin</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>4. Tujuan Sistem</h2>
+<ol>
+<li>Menyediakan <strong>katalog digital</strong> ATK yang dapat dicari (teks &amp; gambar) dengan data stok akurat.</li>
+<li>Menutup siklus <strong>pesanan → pembayaran → pengiriman → ulasan</strong> dalam satu sistem berbasis peran.</li>
+<li>Memberi <strong>otorisasi ketat</strong> per peran (Admin, Anggota, Kurir, Pelanggan) dengan jejak audit.</li>
+<li>Mengirim <strong>notifikasi otomatis</strong> (Telegram, WhatsApp, Email) pada kejadian bisnis penting.</li>
+<li>Menyediakan <strong>chatbot AI</strong> yang memahami aplikasi, database (lewat backend terkontrol), dan menjawab sesuai hak akses.</li>
+<li>Menyediakan <strong>pencarian produk berbasis gambar</strong> untuk menemukan barang ATK dari foto.</li>
+</ol>
+<hr>
+<h2>5. Manfaat Sistem</h2>
+<table>
+<thead>
+<tr>
+<th>Pihak</th>
+<th>Manfaat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pemilik/Admin</td>
+<td>Stok &amp; penjualan terpantau; laporan siap cetak; notifikasi otomatis; jejak audit</td>
+</tr>
+<tr>
+<td>Anggota (pegawai)</td>
+<td>Kerja katalog/stok/pesanan lebih cepat; barcode scan; panduan lewat chatbot</td>
+</tr>
+<tr>
+<td>Kurir</td>
+<td>Daftar tugas pengiriman jelas; update status terdokumentasi</td>
+</tr>
+<tr>
+<td>Pembeli</td>
+<td>Cari produk via foto; lacak pesanan; info harga/stok instan</td>
+</tr>
+<tr>
+<td>Akademik</td>
+<td>Demonstrasi integrasi AI (NLP + computer vision) pada sistem informasi nyata</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>6. Ruang Lingkup Aplikasi</h2>
+<p><strong>Masuk (in scope):</strong>
+- Autentikasi &amp; otorisasi 4 peran; profil &amp; keamanan akun.
+- Kategori, produk (CRUD admin/anggota), gambar produk, barcode scan.
+- Keranjang, alamat, checkout, pesanan, pembayaran (unggah bukti + verifikasi), pengiriman (penugasan kurir + status), ulasan.
+- Laporan penjualan (filter, ekspor, cetak) &amp; log aktivitas.
+- Chatbot AI (web), pencarian gambar (kamera/unggah), notifikasi Telegram/WhatsApp/Email + webhook masuk.
+- Tema terang/gelap, halaman error, backup database.</p>
+<p><strong>Keluar (out of scope):</strong>
+- Pembayaran online gateway (transfer manual + verifikasi admin).
+- Aplikasi mobile native; multi-toko/franchise; pengiriman lintas negara.
+- Integrasi akuntansi penuh (laporan ringkas saja).</p>
+<hr>
+<h2>7. Target Pengguna</h2>
+<table>
+<thead>
+<tr>
+<th>Aktor</th>
+<th>Deskripsi</th>
+<th>Login</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Admin</td>
+<td>Pemilik/pengelola toko — kendali penuh</td>
+<td>Ya</td>
+</tr>
+<tr>
+<td>Anggota</td>
+<td>Pegawai toko — katalog, stok, pesanan</td>
+<td>Ya</td>
+</tr>
+<tr>
+<td>Kurir — Pengantar paket internal</td>
+<td>Ya</td>
+<td></td>
+</tr>
+<tr>
+<td>Pelanggan</td>
+<td>Pembeli — belanja, bayar, lacak, ulas</td>
+<td>Ya</td>
+</tr>
+<tr>
+<td>Tamu</td>
+<td>Pengunjung — lihat katalog &amp; chatbot dasar</td>
+<td>Tidak</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>8. Batasan Sistem</h2>
+<ol>
+<li>Hanya berjalan pada web (browser modern) + layanan pendukung (MySQL, queue worker, layanan AI Python opsional).</li>
+<li>Notifikasi terluar bergantung kredensial pihak ketiga (lihat §18–19).</li>
+<li>Chatbot <strong>tidak</strong> memiliki akses SQL bebas — hanya intent yang dipetakan di backend.</li>
+<li>Chatbot tidak menjawab permintaan data pribadi pihak lain atau rahasia sistem.</li>
+<li>Pembayaran hanya manual (bukti transfer diverifikasi admin).</li>
+<li>Pencarian gambar hanya untuk <strong>barang ATK</strong>; di luar itu ditolak dengan pesan baku.</li>
+</ol>
+<hr>
+<h2>9. Gambaran Umum Sistem</h2>
+<p><strong>Arsitektur 3 lapis khas Laravel:</strong>
+- <strong>Presentasi:</strong> Blade + Bootstrap 5 (CDN) + gaya inline; tema ringan.
+- <strong>Aplikasi:</strong> Router → Middleware (peran &amp; keamanan) → Controller → Service/Support → Eloquent.
+- <strong>Data:</strong> MySQL 8 (25 tabel) + queue database + cache database + sesi database.</p>
+<p><strong>Komponen AI:</strong>
+1. <code>AIService</code> + <code>ChatGuard</code> + <code>DatabaseKnowledgeService</code> + <code>ChatbotDataService</code> + <code>ChatbotProfile</code> (PHP, dalam aplikasi).
+2. <code>ai-service/</code> — layanan Python <code>server.py</code> (inferensi <strong>YOLOv8</strong>), <code>train.py</code>, <code>evaluate.py</code>, model <code>yolov8n-atk.pt</code>.
+3. Provider LLM eksternal (OpenAI-compatible) untuk jawaban umum — <strong>menunggu kunci valid</strong>.</p>
+<p><em>(Diagram lengkap: <code>docs/SDD_ARSITEKTUR_AGUNG_ATK.md</code>.)</em></p>
+<hr>
+<h2>10. Kebutuhan Fungsional</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Kebutuhan</th>
+<th>Penerima</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Sistem SHALL mendaftarkan &amp; mengautentikasi pengguna dengan email+kata sandi, membatasi percobaan 5/menit</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Sistem SHALL mengarahkan pengguna ke dashboard sesuai role setelah login</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>Sistem SHALL menampilkan katalog produk aktif (nama, merk, harga, stok, gambar) beserta pencarian &amp; filter</td>
+<td>Tamu/Pelanggan</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>Sistem SHALL menampilkan detail produk per slug + ulasan</td>
+<td>Tamu/Pelanggan</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>Sistem SHALL memindai barcode produk (<code>products/scan/{code}</code>) untuk mempercepat pencarian pegawai</td>
+<td>Anggota</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>Sistem SHALL mengelola kategori, produk, &amp; stok (CRUD + gambar)</td>
+<td>Admin/Anggota</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>Sistem SHALL mengelola keranjang, alamat, dan checkout menjadi pesanan</td>
+<td>Pelanggan</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>Sistem SHALL menerima unggah bukti pembayaran &amp; mencatat status verifikasi</td>
+<td>Pelanggan/Admin</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>Sistem SHALL menugaskan kurir &amp; mencatat status pengiriman hingga selesai</td>
+<td>Admin/Kurir</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>Sistem SHALL menampilkan riwayat pesanan sesuai hak akses (pelanggan: miliknya; kurir: tugasnya; admin: semua)</td>
+<td>Semua login</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Sistem SHALL membuat laporan penjualan dengan filter tanggal + ekspor/cetak</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>F12</td>
+<td>Sistem SHALL mencatat jejak aktivitas (aktor, aksi, objek, waktu)</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>F13</td>
+<td>Sistem SHALL mengelola pengguna &amp; reset password pegawai</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>F14</td>
+<td>Sistem SHALL mengirim notifikasi pada kejadian (pesanan dibuat/diverifikasi/dikirim, ringkasan harian 07:00)</td>
+<td>Admin/Anggota/Kurir/Pelanggan</td>
+</tr>
+<tr>
+<td>F15</td>
+<td>Sistem SHALL melayani chatbot pada halaman beranda untuk tamu &amp; semua role</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F16</td>
+<td>Sistem SHALL menjawab identitas chatbot secara baku saat ditanya "Siapa kamu?"</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F17</td>
+<td>Sistem SHALL menjawab pertanyaan data toko lewat intent read-only yang diskop per role</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F18</td>
+<td>Sistem SHALL menolak pertanyaan privasi/rahasia dengan respons tetap</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F19</td>
+<td>Sistem SHALL melayani perintah <code>/menu</code>, <code>/stok</code>, <code>/produk</code>, <code>/pesanan</code>, <code>/lacak</code></td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F20</td>
+<td>Sistem SHALL menjawab sapaan dalam bahasa yang dipakai pengguna (12 bahasa terdeteksi pada mode lokal)</td>
+<td>Semua</td>
+</tr>
+<tr>
+<td>F21</td>
+<td>Sistem SHALL mencari produk dari foto (kamera/unggah) dan mencocokkan ke katalog</td>
+<td>Pelanggan/Anggota</td>
+</tr>
+<tr>
+<td>F22</td>
+<td>Sistem SHALL menampilkan <strong>"Barang Tidak Sesuai Kriteria Toko"</strong> untuk gambar di luar ATK, dan <strong>"Stok Kosong"</strong> bila cocok tetapi habis</td>
+<td>Pelanggan/Anggota</td>
+</tr>
+<tr>
+<td>F23</td>
+<td>Sistem SHALL menerima webhook Telegram/WhatsApp yang tervalidasi secret &amp; membalas chatbot lewat kanal</td>
+<td>Sistem</td>
+</tr>
+<tr>
+<td>F24</td>
+<td>Sistem SHALL menautkan akun kanal (WA/TG) ke akun login lewat kode 6 digit kedaluwarsa 10 menit</td>
+<td>Pelanggan</td>
+</tr>
+<tr>
+<td>F25</td>
+<td>Sistem SHALL menyediakan tema terang/gelap/system</td>
+<td>Semua</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>11. Kebutuhan Nonfungsional</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Kebutuhan</th>
+<th>Target terukur</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NF1</td>
+<td>Ketersediaan</td>
+<td>Aplikasi lokal berjalan penuh tanpa layanan eksternal wajib; fitur eksternal gagal → pesan jujur, bukan error</td>
+</tr>
+<tr>
+<td>NF2</td>
+<td>Performa halaman</td>
+<td>Halaman utama termuat &lt; 3 detik pada lokal (terukur: 200 OK ±2dt)</td>
+</tr>
+<tr>
+<td>NF3</td>
+<td>Performa chatbot lokal</td>
+<td>Jawaban intent/perintah tanpa panggilan jaringan (&lt; 1 dtk)</td>
+</tr>
+<tr>
+<td>NF4</td>
+<td>Keamanan</td>
+<td>Kata sandi hashed (bcrypt), CSRF, rate limit login, header keamanan, token hanya di <code>.env</code></td>
+</tr>
+<tr>
+<td>NF5</td>
+<td>Integritas data</td>
+<td>Transaksi pada checkout; query chatbot read-only; backup tersedia</td>
+</tr>
+<tr>
+<td>NF6</td>
+<td>Keterlacakan</td>
+<td>Setiap aksi penting tercatat di <code>activity_logs</code>/<code>notification_logs</code></td>
+</tr>
+<tr>
+<td>NF7</td>
+<td>Keterbacaan/bahasa</td>
+<td>Antarmuka &amp; jawaban chatbot Bahasa Indonesia; chatbot mengikuti bahasa pengguna</td>
+</tr>
+<tr>
+<td>NF8</td>
+<td>Portabilitas</td>
+<td>Windows/Linux (dokumentasi deploy cron/supervisor/systemd tersedia)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>12. User Stories</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>User Story</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>US1</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>melihat daftar produk ATK beserta harga dan stok</strong>, sehingga saya dapat memilih barang tanpa bertanya ke pegawai.</td>
+</tr>
+<tr>
+<td>US2</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>memotret/mengunggah gambar barang</strong>, sehingga saya menemukan produk yang mirip di katalog.</td>
+</tr>
+<tr>
+<td>US3</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>memasukkan barang ke keranjang dan checkout</strong>, sehingga pesanan saya tercatat resmi.</td>
+</tr>
+<tr>
+<td>US4</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>mengunggah bukti bayar dan melihat status verifikasi</strong>, sehingga saya tahu pesanan diproses.</td>
+</tr>
+<tr>
+<td>US5</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>melacak pesanan &amp; resi saya sendiri</strong>, sehingga saya tahu paket sudah sampai mana.</td>
+</tr>
+<tr>
+<td>US6</td>
+<td>Sebagai <strong>pembeli</strong>, saya ingin <strong>menanyakan hal umum ke chatbot kapan saja</strong>, sehingga tidak perlu menunggu pegawai.</td>
+</tr>
+<tr>
+<td>US7</td>
+<td>Sebagai <strong>pegawai (Anggota)</strong>, saya ingin <strong>mencari produk lewat barcode</strong>, sehingga pengecekan stok di rak cepat.</td>
+</tr>
+<tr>
+<td>US8</td>
+<td>Sebagai <strong>pegawai (Anggota)</strong>, saya ingin <strong>memperbarui stok &amp; produk</strong>, sehingga katalog selalu akurat.</td>
+</tr>
+<tr>
+<td>US9</td>
+<td>Sebagai <strong>pegawai (Anggota)</strong>, saya ingin <strong>melihat daftar pesanan yang perlu diproses</strong>, sehingga tidak ada pesanan terlewat.</td>
+</tr>
+<tr>
+<td>US10</td>
+<td>Sebagai <strong>kurir</strong>, saya ingin <strong>melihat daftar pengiriman yang ditugaskan kepada saya dan memperbarui statusnya</strong>, sehingga pengiriman terdokumentasi.</td>
+</tr>
+<tr>
+<td>US11</td>
+<td>Sebagai <strong>admin</strong>, saya ingin <strong>memverifikasi pembayaran dan menugaskan kurir</strong>, sehingga alur pesanan berjalan tanpa hambatan.</td>
+</tr>
+<tr>
+<td>US12</td>
+<td>Sebagai <strong>admin</strong>, saya ingin <strong>melihat laporan penjualan dan mengekspornya</strong>, sehingga pembukuan mudah.</td>
+</tr>
+<tr>
+<td>US13</td>
+<td>Sebagai <strong>admin</strong>, saya ingin <strong>menerima notifikasi otomatis (Telegram/Email) untuk kejadian penting dan ringkasan harian</strong>, sehingga saya selalu tahu kondisi toko.</td>
+</tr>
+<tr>
+<td>US14</td>
+<td>Sebagai <strong>admin</strong>, saya ingin <strong>mengetahui siapa melakukan aksi apa (log aktivitas)</strong>, sehingga kesalahan dapat ditelusuri.</td>
+</tr>
+<tr>
+<td>US15</td>
+<td>Sebagai <strong>pengguna (semua peran)</strong>, saya ingin <strong>chatbot menjawab sesuai peran saya dan tidak membocorkan data orang lain</strong>, sehingga aman dipakai.</td>
+</tr>
+<tr>
+<td>US16</td>
+<td>Sebagai <strong>mahasiswa</strong>, saya ingin <strong>seluruh fitur teruji otomatis</strong>, sehingga perubahan tidak merusak fungsi yang ada.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>13. Acceptance Criteria</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Acceptance Criteria (terukur &amp; dapat diuji)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC1</td>
+<td>(US1) GET <code>/products</code> → 200; menampilkan produk aktif; produk nonaktif tidak tampil — <em>teruji <code>CatalogCartTest</code></em></td>
+</tr>
+<tr>
+<td>AC2</td>
+<td>(US2) Unggah gambar ATK → daftar kecocokan tampil; gambar non-ATK → pesan <strong>"Barang Tidak Sesuai Kriteria Toko"</strong>; produk habis → <strong>"Stok Kosong"</strong> — <em>teruji <code>ImageSearchTest</code>, <code>YoloImageSearchTest</code></em></td>
+</tr>
+<tr>
+<td>AC3</td>
+<td>(US3) Checkout mengurangi stok &amp; membuat <code>orders</code> + <code>order_details</code> dalam satu transaksi — <em>teruji <code>CheckoutTest</code></em></td>
+</tr>
+<tr>
+<td>AC4</td>
+<td>(US4) Unggah bukti → status <code>pending</code>; verifikasi admin → status <code>verified</code> + notifikasi — <em>teruji <code>PaymentManagementTest</code></em></td>
+</tr>
+<tr>
+<td>AC5</td>
+<td>(US5) Pelanggan hanya melihat pesanan miliknya (permintaan ID lain → 403/penolakan) — <em>teruji <code>RoleAccessTest</code>, <code>ChatbotDataIntegrationTest</code></em></td>
+</tr>
+<tr>
+<td>AC6</td>
+<td>(US6) Chatbot menjawab pertanyaan umum dalam bahasa pertanyaan <strong>atau</strong> — bila API AI tak tersedia — jawaban fallback jujur tanpa mengarang — <em>teruji <code>ChatbotCommandsTest</code>, <code>ChatbotSimpleQuestionTest</code></em></td>
+</tr>
+<tr>
+<td>AC7</td>
+<td>(US7) Pemindaian barcode valid → halaman produk; kode tidak ada → pesan gagal jelas — <em>teruji <code>BarcodeScanTest</code></em></td>
+</tr>
+<tr>
+<td>AC8</td>
+<td>(US8) Perubahan stok tercatat &amp; terlihat di katalog; stok tak boleh negatif — <em>teruji <code>SellerModuleTest</code>, <code>AdminCatalogTest</code></em></td>
+</tr>
+<tr>
+<td>AC9</td>
+<td>(US9) Pesanan baru muncul di daftar anggota; pelanggan TIDAK melihat halaman anggota — <em>teruji <code>RoleAccessTest</code></em></td>
+</tr>
+<tr>
+<td>AC10</td>
+<td>(US10) Kurir hanya melihat pengiriman yang ditugasinya; update status terekam — <em>teruji <code>ShipmentModuleTest</code></em></td>
+</tr>
+<tr>
+<td>AC11</td>
+<td>(US11) Verifikasi pembayaran wajib login admin; penugasan kurir mengubah status pesanan — <em>teruji <code>PaymentManagementTest</code></em></td>
+</tr>
+<tr>
+<td>AC12</td>
+<td>(US12) Laporan menampilkan total penjualan sesuai data tersimpan; ekspor menghasilkan file — <em>teruji <code>DashboardReportTest</code></em></td>
+</tr>
+<tr>
+<td>AC13</td>
+<td>(US13) Kejadian terjadwal menghasilkan baris <code>notification_logs</code>; uji kirim dari halaman admin → email diterima Mailpit — <em>teruji <code>NotificationDispatchTest</code> + uji live 13 Nov 2026</em></td>
+</tr>
+<tr>
+<td>AC14</td>
+<td>(US14) Setiap aksi CRUD tercatat di <code>activity_logs</code> dengan aktor &amp; waktu — <em>teruji <code>BusinessAuditTest</code></em></td>
+</tr>
+<tr>
+<td>AC15</td>
+<td>(US15) Pertanyaan "siapa data pelanggan X" → penolakan tetap; pesan mengandung pola system prompt → output disaring — <em>teruji <code>ChatbotIdentityTest</code>, <code>ChatbotIntelligenceTest</code></em></td>
+</tr>
+<tr>
+<td>AC16</td>
+<td>(US16) <code>php artisan test</code> → <strong>614/614 lulus (2.908 asersi)</strong> — <em>terverifikasi 15 Nov 2026</em></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>14. Kebutuhan Database</h2>
+<ul>
+<li><strong>25 tabel</strong> MySQL 8 (lihat daftar pada <code>docs/AUDIT_PROYEK_AGUNG_ATK.md</code> §7), konsisten dengan 25 migration.</li>
+<li>Intitas inti: <code>users</code>↔<code>roles</code> (1:N), <code>categories</code>→<code>products</code> (1:N), <code>products</code>↔<code>product_images</code> (1:N), <code>users</code>→<code>orders</code>→<code>order_details</code>→<code>products</code>, <code>orders</code>→<code>payments</code> (1:N), <code>orders</code>→<code>shipments</code> (1:N, dengan <code>courier_id</code> → <code>users</code>), <code>users</code>→<code>reviews</code>→<code>products</code>, <code>users</code>→<code>addresses</code>.</li>
+<li>Tabel pendukung: <code>activity_logs</code>, <code>notification_logs</code>, <code>notification_settings</code>, <code>channel_identities</code>, <code>ai_conversations</code>, <code>ai_messages</code>, <code>jobs</code>, <code>failed_jobs</code>, <code>job_batches</code>, <code>sessions</code>, <code>cache</code>, <code>password_reset_tokens</code>, <code>migrations</code>.</li>
+<li>Kebutuhan: integritas referensial (FK), indeks pada kolom pencarian (<code>slug</code>, <code>sku</code>, <code>tracking_number</code>, <code>order_number</code>), tanpa kolom rahasia tersimpan plaintext (token notifikasi hidup di <code>.env</code>).</li>
+</ul>
+<hr>
+<h2>15. Kebutuhan Keamanan</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Kebutuhan</th>
+<th>Implementasi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>Autentikasi wajib + sesi aman</td>
+<td>Laravel session (database), password hashing bcrypt</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>Autorisasi per role di server</td>
+<td>4 middleware peran + <code>EnsureAccountIsActive</code></td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Proteksi CSRF</td>
+<td><code>VerifyCsrfToken</code> (kecuali <code>webhooks/*</code>)</td>
+</tr>
+<tr>
+<td>S4</td>
+<td>Pembatasan brute-force</td>
+<td><code>throttle:login/register/password/chat/webhook</code></td>
+</tr>
+<tr>
+<td>S5</td>
+<td>Rahasia tidak di source code</td>
+<td>Token hanya <code>.env</code> (gitignore); halaman admin hanya menampilkan nama variabel</td>
+</tr>
+<tr>
+<td>S6</td>
+<td>Validasi webhook eksternal</td>
+<td>WA: HMAC-SHA256 <code>X-Hub-Signature-256</code>; TG: header secret fail-closed; dedupe update</td>
+</tr>
+<tr>
+<td>S7</td>
+<td>Privasi chatbot</td>
+<td>Penolakan privasi sebelum model dipanggil; output disaring; data diskop role</td>
+</tr>
+<tr>
+<td>S8</td>
+<td>Injeksi prompt</td>
+<td><code>ChatGuard</code> menolak pola injeksi &amp; kebocoran konteks internal</td>
+</tr>
+<tr>
+<td>S9</td>
+<td>Header keamanan</td>
+<td>Middleware <code>SecurityHeaders</code> (teruji <code>SecurityHeadersTest</code>)</td>
+</tr>
+<tr>
+<td>S10</td>
+<td>Jejak audit</td>
+<td><code>activity_logs</code> untuk aksi penting</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>16. Kebutuhan Performa</h2>
+<ul>
+<li>Pemuatan halaman publik &lt; 3 detik pada lingkungan lokal (terukur ±2dt).</li>
+<li>Chatbot mode lokal menjawab &lt; 1 detik (tanpa jaringan).</li>
+<li>Chatbot mode API memiliki timeout konfigurabel (<code>AI_TIMEOUT</code>, default 60 dtk) dan gagal → fallback jujur.</li>
+<li>Query chatbot ber-limit (<code>LIMIT</code> daftar, agregasi ringkas) untuk menjaga beban DB.</li>
+<li>Queue notifikasi asinkron (<code>queue:worker</code>) agar HTTP request tidak tertahan.</li>
+</ul>
+<hr>
+<h2>17. Kebutuhan Kompatibilitas</h2>
+<table>
+<thead>
+<tr>
+<th>Lapisan</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Browser</td>
+<td>Chrome/Edge/Firefox/Safari terbaru (layout Bootstrap 5.3)</td>
+</tr>
+<tr>
+<td>Server</td>
+<td>PHP 8.3+, Laravel 13, MySQL 8 / MariaDB 10.4+ (SQLite untuk tes)</td>
+</tr>
+<tr>
+<td>OS pengembangan</td>
+<td>Windows (Laragon) &amp; Linux (dokumentasi deploy tersedia)</td>
+</tr>
+<tr>
+<td>Layanan opsional</td>
+<td>Python 3 + paket <code>ai-service/requirements.txt</code> untuk YOLOv8; Mailpit/SMTP untuk email</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>18. Kebutuhan Integrasi API</h2>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>Penggunaan</th>
+<th>Status jujur (15 Nov 2026)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Telegram Bot API</strong></td>
+<td>Kirim notifikasi, <code>getMe</code>/<code>setWebhook</code>/<code>webhookInfo</code>, terima webhook masuk</td>
+<td>✅ Keluar teruji (<code>Telegram OK (@AGUNGATK_bot)</code>); ⏸️ webhook masuk menunggu keputusan username + URL HTTPS</td>
+</tr>
+<tr>
+<td><strong>WhatsApp Cloud API (Meta)</strong></td>
+<td>Kirim notifikasi teks/template, webhook masuk + verifikasi signature</td>
+<td>⏸️ Mekanisme lengkap &amp; teruji mock; <strong>kredensial menunggu</strong> (kunci yang diberikan ditolak Meta: code 190)</td>
+</tr>
+<tr>
+<td><strong>SMTP (Laravel Mailer)</strong></td>
+<td>Email notifikasi</td>
+<td>✅ Teruji end-to-end via Mailpit (13 Nov 2026)</td>
+</tr>
+<tr>
+<td><strong>LLM OpenAI-compatible</strong></td>
+<td>Jawaban chatbot umum multi-bahasa</td>
+<td>⏸️ Mekanisme siap; <strong>kunci saat ini 401</strong> — menunggu kunci valid</td>
+</tr>
+<tr>
+<td><strong>Layanan AI lokal (YOLOv8)</strong></td>
+<td>Deteksi objek untuk pencarian gambar</td>
+<td>✅ <code>ai-service/server.py</code> port 8090 aktif; model terlatih</td>
+</tr>
+</tbody>
+</table>
+<p>Semua kredensial hanya melalui environment variable — <strong>tidak pernah</strong> dalam source code, dokumen, atau commit.</p>
+<hr>
+<h2>19. Spesifikasi Fitur AI</h2>
+<blockquote>
+<p>Disusun dari <strong>implementasi aktual</strong> — tanpa klaim yang belum terbukti.</p>
+</blockquote>
+<h3>19.1 Chatbot pemaham aplikasi (<code>AIService</code>, <code>Chatguard</code>, <code>ChatbotProfile</code>, <code>WorkflowKnowledge</code>)</h3>
+<ul>
+<li>Menjawab pertanyaan tentang <strong>fitur, alur, dan panduan</strong> aplikasi dari knowledge base yang ditulis dari kode nyata.</li>
+<li>Identitas baku "Siapa kamu?" — aktor diambil dari <strong>role session server</strong>, bukan ketikan pengguna.</li>
+<li><strong>18+ skenario</strong> pemahaman sistem teruji (<code>ChatbotSystemUnderstandingTest</code>, <code>ChatbotSystemMapTest</code>).</li>
+</ul>
+<h3>19.2 Chatbot pemaham database via backend terkontrol (<code>DatabaseKnowledgeService</code>, <code>ChatbotDataService</code>)</h3>
+<ul>
+<li>Pertanyaan bahasa alami dipetakan ke <strong>intent terbatas</strong> (harga/stok, produk terlaris, pendapatan, jumlah pesanan, status pesanan milik sendiri, resi, tugas kurir, dsb).</li>
+<li>Query dijalankan <strong>read-only</strong> di Laravel, diskop per role di server, dengan LIMIT/agregasi — <strong>tanpa SQL bebas</strong>, tanpa akses tabel rahasia.</li>
+<li>Jawaban memakai <strong>angka nyata</strong> dari database; bila kosong → jawaban kosong yang jujur; bila gagal → jawaban aman.</li>
+</ul>
+<h3>19.3 Jawaban tanpa sumber data</h3>
+<ul>
+<li>Bila data tidak tersedia → jawaban fallback jujur: <em>"saya tidak memiliki informasi yang cukup… saya tidak boleh mengarang jawaban"</em> — diuji sebagai perilaku.</li>
+</ul>
+<h3>19.4 Perlindungan data pribadi &amp; rahasia</h3>
+<ul>
+<li>Input ditolak <strong>sebelum</strong> model dipanggil untuk pertanyaan privasi/PII/rahasia (<code>ChatGuard</code>).</li>
+<li>Output disaring dari pola kebocoran system prompt &amp; rahasia teknis.</li>
+<li>Lintas pengguna: pelanggan hanya melihat pesan/pesanannya sendiri.</li>
+</ul>
+<h3>19.5 Multi-bahasa &amp; perintah</h3>
+<ul>
+<li>System prompt mewajibkan <strong>balas dengan bahasa pengguna</strong> (Indonesia termasuk gaya santai, Inggris, Jawa, Sunda, Arab, Mandarin, Jepang, Korea, Prancis, Spanyol, Portugis, Jerman, Hindi).</li>
+<li>Perintah lokal deterministik: <code>/menu|/help|/bantuan|/ayuda|/aide|/帮助|/ヘルプ|/도움말|/مساعدة</code>, <code>/stok</code>, <code>/produk|/rekomendasi</code>, <code>/pesanan</code>, <code>/lacak &lt;ORD|TRK&gt;</code> — 33 tes (<code>ChatbotCommandsTest</code>).</li>
+<li>Sapaan 12 bahasa dibalas pada bahasa yang sama (mode lokal).</li>
+</ul>
+<h3>19.6 Pencarian produk berbasis gambar (Computer Vision — <strong>YOLOv8 nyata</strong>)</h3>
+<ul>
+<li><code>ATKImageRecognitionService</code> driver <strong>hybrid</strong>: mendeteksi objek lewat layanan Python <code>ai-service/server.py</code> (<strong>model <code>yolov8n-atk.pt</code> terlatih</strong>, diuji <code>evaluate.py</code>, artefak <code>runs/atk-yolov8n/</code> berisi confusion matrix &amp; kurva PR), lalu mencocokkan kelas ke katalog produk.</li>
+<li>Fallback ke pengenalan bawaan saat layanan mati → aplikasi tetap berfungsi.</li>
+<li>Ambang <code>min_confidence</code>/<code>min_margin</code> dikonfigurasi agar hasil tidak mengarang.</li>
+<li><strong>Bukan</strong> barcode scan (fitur barcode terpisah untuk anggota).</li>
+<li>Hasil wajib: cocok → saran produk katalog; bukan ATK → <strong>"Barang Tidak Sesuai Kriteria Toko"</strong>; habis → <strong>"Stok Kosong"</strong>.</li>
+</ul>
+<h3>19.7 Yang TIDAK diklaim (jujur)</h3>
+<ul>
+<li>❌ RAG, Vector Database, fine-tuning LLM, multi-agent — <strong>tidak diimplementasikan</strong>.</li>
+<li>❌ Model bahasa berjalan lokal — jawaban umum bergantung API eksternal (<strong>kunci saat ini belum valid</strong>).</li>
+<li>❌ Klaim akurasi persentase YOLO tanpa angka — angka resmi hanya yang tercatat di <code>ai-service/models/metrics.json</code>.</li>
+</ul>
+<h3>19.8 Manfaat nyata AI terhadap operasional toko</h3>
+<table>
+<thead>
+<tr>
+<th>Fitur AI</th>
+<th>Manfaat operasional</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chatbot tanya-jawab</td>
+<td>Mengurangi pertanyaan repetitif ke pegawai (harga, stok, status) — 24/7</td>
+</tr>
+<tr>
+<td>Intent data read-only</td>
+<td>Pemilik/pegawai mendapat angka penjualan/stok tanpa membuka laporan manual</td>
+</tr>
+<tr>
+<td>Pencarian gambar</td>
+<td>Pembeli menemukan produk dari foto — menaikkan konversi pencarian</td>
+</tr>
+<tr>
+<td>Deteksi YOLOv8</td>
+<td>Mengenali jenis barang ATK walau pengguna tidak tahu nama produknya</td>
+</tr>
+<tr>
+<td>Notifikasi AI-adjacent</td>
+<td>Ringkasan harian otomatis memanggil perhatian pemilik tepat waktu</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>20. Risiko dan Asumsi Proyek</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Risiko</th>
+<th>Dampak</th>
+<th>Mitasi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RK1</td>
+<td>Kunci AI eksternal tidak valid (kondisi aktual: 401)</td>
+<td>Jawaban umum chatbot fallback lokal</td>
+<td>Sediakan kunci valid; fallback jujur sudah aman</td>
+</tr>
+<tr>
+<td>RK2</td>
+<td>Kredensial WhatsApp belum benar (kondisi aktual: ditolak Meta)</td>
+<td>Notifikasi WA nonaktif</td>
+<td>Mekanisme lengkap menunggu kredensial resmi</td>
+</tr>
+<tr>
+<td>RK3</td>
+<td>Webhook butuh URL HTTPS publik</td>
+<td>Balasan chatbot via kanal tertunda</td>
+<td>Dokumentasi <code>chatbot:webhook set</code> + tunnel siap dipakai</td>
+</tr>
+<tr>
+<td>RK4</td>
+<td>Ketergantungan CDN</td>
+<td>UI rusak tanpa internet</td>
+<td>Pertimbangkan aset lokal (rekomendasi audit)</td>
+</tr>
+<tr>
+<td>RK5</td>
+<td>Data dummy hanya di lingkungan dev</td>
+<td>Salah bila dipindah ke produksi</td>
+<td>Seeder hanya untuk dev; produksi dengan data nyata</td>
+</tr>
+<tr>
+<td>RK6</td>
+<td>Tanpa GitHub remote/CI (kondisi aktual)</td>
+<td>Bukti otomasi belum ada</td>
+<td>FASE 6 menyiapkan workflow; push oleh pemilik</td>
+</tr>
+<tr>
+<td>RK7</td>
+<td>Video belum direkam</td>
+<td>Nilai video 0 sementara</td>
+<td>Naskah disediakan FASE 7; rekaman oleh mahasiswa</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Asumsi:</strong>
+1. Pengguna berinternet stabil untuk halaman berbasis CDN.
+2. Verifikasi pembayaran manual diterima sebagai desain bisnis toko.
+3. Semua kredensial eksternal disediakan pemilik proyek.</p>
+<hr>
+<ul>
+<li>Dokumen ini bersumber dari kode &amp; pengujian aktual. Perubahan fitur wajib memperbarui dokumen ini (traceability F ↔ AC ↔ tes).*</li>
+</ul>
+<hr>
+<h1>SDD — Spesifikasi Desain Arsitektur</h1>
+<h1>SDD — SPESIFIKASI DESAIN ARSITEKTUR AGUNG ATK</h1>
+<p><strong>Versi:</strong> 1.0 — 15 November 2026
+<strong>Cakupan:</strong> arsitektur sistem, keterkaitan diagram↔kode, dan audit UI/UX + rancangan prototype.
+<strong>Diagram detail:</strong> <code>docs/uml/use_case.md</code>, <code>activity.md</code>, <code>class_diagram.md</code>, <code>sequence_diagram.md</code>, <code>erd.md</code>.</p>
+<hr>
+<h2>1. Gambaran Umum Sistem</h2>
+<pre><code class="language-mermaid">flowchart TB
+    subgraph KLIEN[&quot;Klien&quot;]
+        B[Browser: Pelanggan / Anggota / Kurir / Admin / Tamu]
+        TG[Telegram App]
+        WA[WhatsApp]
+        CAM[Kamera/Unggah Foto]
+    end
+
+    subgraph LAYANAN[&quot;Layanan Aplikasi (Laravel 13 / PHP 8.3)&quot;]
+        W[Router + Middleware&lt;br/&gt;peran, CSRF, throttle, security headers]
+        CTRL[Controllers&lt;br/&gt;Auth, Catalog, Cart, Checkout, Order,&lt;br/&gt;Payment, Dashboard, Profile, AI, Admin/Seller/Courier, Webhook]
+        SVC[Services&lt;br/&gt;NotificationManager, Telegram/WhatsApp Notification,&lt;br/&gt;ChannelIdentityService, InboundChatService, ATKImageRecognitionService]
+        SUP[Support / Chatbot&lt;br/&gt;AIService, ChatGuard, ChatbotDataService,&lt;br/&gt;DatabaseKnowledgeService, ChatbotProfile, WorkflowKnowledge]
+        JOB[Queue Jobs&lt;br/&gt;SendChannelReplyJob, notifikasi]
+        SCH[Scheduler&lt;br/&gt;ringkasan 07:00, prune failed]
+    end
+
+    subgraph DATA[&quot;Data (MySQL 8)&quot;]
+        DB[(25 tabel&lt;br/&gt;orders, products, payments,&lt;br/&gt;shipments, notification_logs, ...)]
+        SES[(sessions / cache / jobs)]
+    end
+
+    subgraph EKSTERNAL[&quot;Eksternal&quot;]
+        LLM[Provider LLM OpenAI-compatible&lt;br/&gt;AI_API_KEY]
+        YOLO[ai-service/server.py&lt;br/&gt;YOLOv8 :8090]
+        TGA[Telegram Bot API]
+        WAA[WhatsApp Cloud API Meta]
+        SMTP[SMTP Mailpit :1025]
+    end
+
+    B --&gt; W
+    TG --&gt;|webhook secret| W
+    WA --&gt;|webhook HMAC| W
+    CAM --&gt; B
+    W --&gt; CTRL --&gt; SVC --&gt; DB
+    W --&gt; SUP
+    SUP --&gt; LLM
+    SUP --&gt; YOLO
+    SVC --&gt; JOB --&gt; TGA
+    JOB --&gt; WAA
+    JOB --&gt; SMTP
+    SVC --&gt; TGA
+    SCH --&gt; SVC
+    CTRL --&gt; SES
+    SVC --&gt; SES
+</code></pre>
+<h3>Prinsip desain</h3>
+<ol>
+<li><strong>Satu sumber kebenaran:</strong> semua angka dari database lewat Eloquent (chatbot tanpa SQL bebas).</li>
+<li><strong>Otorisasi di server:</strong> middleware peran menentukan akses; chatbot memakai role dari session.</li>
+<li><strong>Pagaran berlapis pada AI:</strong> guard input → lapisan data/perintah → LLM → guard output.</li>
+<li><strong>Gagal aman:</strong> layanan eksternal mati/tolak → fallback jujur, bukan crash (teruji).</li>
+<li><strong>Asinkron untuk I/O eksternal:</strong> notifikasi &amp; balasan kanal lewat queue.</li>
+</ol>
+<hr>
+<h2>2. Keterkaitan Diagram ↔ Kode (traceability)</h2>
+<table>
+<thead>
+<tr>
+<th>Diagram</th>
+<th>Sumber kode nyata</th>
+<th>Tes pemvalidasi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Use case UC1–UC26</td>
+<td><code>routes/web.php</code> (111 route), middleware <code>app/Http/Middleware/*</code></td>
+<td><code>RoleAccessTest</code>, <code>AuthTest</code>, <code>AccountPagesTest</code></td>
+</tr>
+<tr>
+<td>Activity Login</td>
+<td><code>AuthController::login</code>, <code>redirectBasedOnRole</code>, <code>EnsureAccountIsActive</code></td>
+<td><code>AuthTest</code></td>
+</tr>
+<tr>
+<td>Activity Checkout</td>
+<td><code>CheckoutController::store</code> (transaksi)</td>
+<td><code>CheckoutTest</code></td>
+</tr>
+<tr>
+<td>Activity Pencarian Gambar</td>
+<td><code>ATKImageRecognitionService</code>, <code>config/services.php image_search</code></td>
+<td><code>ImageSearchTest</code>, <code>YoloImageSearchTest</code></td>
+</tr>
+<tr>
+<td>Activity Chatbot</td>
+<td><code>AIService::buildReply</code>, <code>ChatGuard</code>, <code>ChatbotDataService</code></td>
+<td><code>ChatbotCommandsTest</code>, <code>ChatbotDataIntegrationTest</code>, <code>ChatbotIntelligenceTest</code></td>
+</tr>
+<tr>
+<td>Activity Notifikasi</td>
+<td><code>NotificationManager::dispatch</code>, <code>config/notifications.php</code></td>
+<td><code>NotificationDispatchTest</code>, <code>NotificationSettingsTest</code></td>
+</tr>
+<tr>
+<td>Activity Tautan Kanal</td>
+<td><code>ChannelIdentityService</code>, <code>ProfileController</code></td>
+<td><code>ChatbotChannelWebhookTest</code></td>
+</tr>
+<tr>
+<td>Class diagram §1</td>
+<td><code>app/Models/*</code> (17 model)</td>
+<td><code>ModelRelationTest</code>, <code>RelationshipTest</code></td>
+</tr>
+<tr>
+<td>Class diagram §2</td>
+<td><code>app/Services/*</code>, <code>app/Support/*</code>, <code>app/Jobs/*</code></td>
+<td>tes integrasi terkait</td>
+</tr>
+<tr>
+<td>Sequence Login/Checkout</td>
+<td>controller + model di atas</td>
+<td><code>AuthTest</code>, <code>CheckoutTest</code></td>
+</tr>
+<tr>
+<td>Sequence Chatbot AI</td>
+<td><code>AIService</code> + <code>ChatGuard</code> + <code>ChatbotDataService</code></td>
+<td><code>Chatbot*Test</code> (8 file)</td>
+</tr>
+<tr>
+<td>Sequence YOLO</td>
+<td><code>YoloDetectionService</code> → <code>ai-service/server.py</code></td>
+<td><code>YoloImageSearchTest</code> (mock HTTP)</td>
+</tr>
+<tr>
+<td>Sequence Notifikasi</td>
+<td><code>NotificationManager</code> → job → service kanal</td>
+<td><code>NotificationDispatchTest</code>, <code>WhatsAppCloudApiTest</code></td>
+</tr>
+<tr>
+<td>Sequence Webhook</td>
+<td><code>WebhookController</code> → <code>InboundChatService</code> → job</td>
+<td><code>ChatbotChannelWebhookTest</code> (30 tes)</td>
+</tr>
+<tr>
+<td>ERD</td>
+<td><code>information_schema</code> MySQL (25 tabel) + migration</td>
+<td><code>ModelRelationTest</code>, <code>RelationshipTest</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>3. Keputusan Arsitektur Penting (Architecture Decision Records ringkas)</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Keputusan</th>
+<th>Alasan</th>
+<th>Alternatif ditolak</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AD1</td>
+<td>Chatbot memakai <strong>intent → Eloquent</strong> untuk data toko</td>
+<td>Aman (read-only, scope role), cepat, angka selalu benar</td>
+<td>Memberi LLM akses SQL bebas → risiko bocor &amp; karangan</td>
+</tr>
+<tr>
+<td>AD2</td>
+<td><strong>ChatGuard di luar model</strong></td>
+<td>Pemeriksaan privasi/rahasia sebelum &amp; sesudah model</td>
+<td>Mengandalkan prompt saja → mudah dibobol</td>
+</tr>
+<tr>
+<td>AD3</td>
+<td><strong>YOLOv8 layanan terpisah</strong> (Python)</td>
+<td>Inferensi berat tidak membebani PHP; dapat di-scale/restart independen</td>
+<td>Menjalankan model di dalam request PHP → lambat &amp; rapuh</td>
+</tr>
+<tr>
+<td>AD4</td>
+<td>Notifikasi via <strong>queue + dedupe + log</strong></td>
+<td>Tahan gagal jaringan, dapat ditelusuri</td>
+<td>Kirim sinkron → timeout memperlambat bisnis</td>
+</tr>
+<tr>
+<td>AD5</td>
+<td>Webhook <strong>fail-closed</strong> (secret/HMAC wajib)</td>
+<td>Mencegah pemalsuan pesan masuk</td>
+<td>Mode longgar → risiko injeksi percakapan</td>
+</tr>
+<tr>
+<td>AD6</td>
+<td>Tautan kanal berbasis <strong>kode 6 digit kedaluwarsa + kunci akun</strong></td>
+<td>Praktis tanpa meminta token di percakapan</td>
+<td>Meminta pengguna mengirim token → jejak rahasia</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>4. Audit UI/UX (terukur dari view aktual)</h2>
+<h3>4.1 Konsistensi desain</h3>
+<ul>
+<li>Dua layout utama: <code>layouts/app.blade.php</code> (publik) &amp; <code>layouts/dashboard.blade.php</code> (berbasis role) — konsisten memakai Bootstrap 5.3.3 + Bootstrap Icons (CDN, lengkap dengan <code>integrity</code>), font Plus Jakarta Sans.</li>
+<li>Komponen kartu/alert/badge dipakai seragam di seluruh halaman admin.</li>
+</ul>
+<h3>4.2 Navigasi &amp; pemisahan menu</h3>
+<ul>
+<li>Sidebar dashboard dibangun per role; pengujian <code>RoleAccessTest</code> &amp; <code>AccountPagesTest</code> memastikan pengguna tidak melihat menu halaman role lain.</li>
+<li><strong>Temuan:</strong> terdapat route alias (<code>/kurir/dashboard</code> ≡ <code>/courier/dashboard</code>, dst.) — menu utama hanya memakai satu bentuk, tetapi alias perlu didokumentasikan agar tidak dianggap "menu ganda".</li>
+</ul>
+<h3>4.3 Responsif &amp; mobile</h3>
+<ul>
+<li>viewport tersedia pada <strong>5 layout</strong>; komponen Bootstrap grid + kelas responsif digunakan; tembel collapsible sidebar (<code>Buka menu navigasi</code>).</li>
+<li>⚠️ Belum ada pengujian otomatis ukuran layar (hanya manual) — catatan perbaikan.</li>
+</ul>
+<h3>4.4 Hierarki visual</h3>
+<ul>
+<li>Judul halaman → breadcrumb/kartu ringkasan → tabel/daftar → aksi; warna aksi utama konsisten (Bootstrap primary).</li>
+</ul>
+<h3>4.5 Form input, validasi &amp; feedback</h3>
+<ul>
+<li><strong>203</strong> tempat menampilkan error field (<code>errors-&gt;first</code>/<code>@error</code>) dan <strong>96</strong> kelas <code>is-invalid</code> → validasi server-side tampil jelas per field.</li>
+<li><strong>29</strong> alert sukses/gagal (<code>alert-success</code>/<code>alert-danger</code>) dari flash session.</li>
+<li>Contoh live: uji kirim notifikasi menampilkan <em>"Pesan uji berhasil terkirim melalui Email ke …"</em>.</li>
+</ul>
+<h3>4.6 Loading state</h3>
+<ul>
+<li>✅ Skrip global di <code>layouts/app.blade.php</code> &amp; <code>layouts/dashboard.blade.php</code>: setiap submit form menonaktifkan tombol + spinner "Memproses…", opt-out <code>data-no-loading</code> untuk form AJAX (chat), pemulihan tombol pada <code>pageshow</code> (bfcache).</li>
+</ul>
+<h3>4.7 Light/Dark/System theme</h3>
+<ul>
+<li><strong>67</strong> referensi mode gelap; <code>partials/theme.blade.php</code> mengelola preferensi (Terang/Gelap/System) — teruji <code>ThemeTest</code>.</li>
+</ul>
+<h3>4.8 Aksesibilitas</h3>
+<ul>
+<li><strong>79</strong> atribut <code>aria-*</code> dan <strong>17</strong> <code>role=</code> tersebar di view (label tombol, <code>aria-expanded</code> menu, dsb).</li>
+<li><code>&lt;html lang="id"&gt;</code> pada kedua layout.</li>
+<li>⚠️ Pemetaan keyboard &amp; kontras warna belum diaudit menyeluruh — catatan perbaikan.</li>
+</ul>
+<h3>4.9 Halaman error &amp; keadaan kosong</h3>
+<ul>
+<li>404/403/500 tersedia (<code>ErrorPagesTest</code>); daftar kosong menampilkan pesan penjelas.</li>
+</ul>
+<h3>4.10 Ringkasan audit UI/UX</h3>
+<table>
+<thead>
+<tr>
+<th>Aspek</th>
+<th>Status</th>
+<th>Bukti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Konsistensi desain</td>
+<td>✅ Baik</td>
+<td>2 layout, Bootstrap CDN ber-integrity</td>
+</tr>
+<tr>
+<td>Navigasi per role</td>
+<td>✅ Baik</td>
+<td><code>RoleAccessTest</code></td>
+</tr>
+<tr>
+<td>Responsivitas</td>
+<td>⚠️ Cukup (manual)</td>
+<td>viewport + grid; tanpa tes otomatis</td>
+</tr>
+<tr>
+<td>Validasi &amp; feedback</td>
+<td>✅ Sangat baik</td>
+<td>203 error field, 29 alert</td>
+</tr>
+<tr>
+<td>Loading state</td>
+<td>⚠️ Kurang</td>
+<td>hanya 4 spinner</td>
+</tr>
+<tr>
+<td>Dark mode</td>
+<td>✅ Baik</td>
+<td>67 titik, teruji <code>ThemeTest</code></td>
+</tr>
+<tr>
+<td>Aksesibilitas</td>
+<td>⚠️ Cukup</td>
+<td>79 aria; audit menyeluruh belum</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>5. Prototype Interaktif</h2>
+<p>Karena lingkungan tidak menyediakan integrasi Figma, disediakan <strong>prototype HTML/CSS/JS interaktif mandiri</strong>:</p>
+<ul>
+<li><strong>File:</strong> <code>docs/prototype/index.html</code> (satu file, tanpa dependensi eksternal, dapat dibuka langsung di browser).</li>
+<li><strong>Cakupan:</strong> alur utama 4 peran — Beranda + pencarian gambar, Katalog &amp; keranjang, Checkout &amp; pelacakan, Dashboard admin (produk/pesanan/laporan), Chatbot — dengan pemilih role, mode gelap, dan navigasi antar layar prototype.</li>
+<li><strong>Status:</strong> prototype rancangan (bukan tangkapan layar aplikasi nyata); halaman nyata aplikasi tetap sumber kebenaran.</li>
+</ul>
+<blockquote>
+<p>Jika nantinya Figma tersedia, struktur layar pada prototype ini siap dipindahkan 1:1 (penamaan layar &amp; komponen konsisten dengan view Blade).</p>
+</blockquote>
+<hr>
+<h2>6. Peta Layer Kode</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Lokasi</th>
+<th>Tanggung jawab</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Routing</td>
+<td><code>routes/web.php</code>, <code>routes/console.php</code> (scheduler)</td>
+<td>111 route + jadwal</td>
+</tr>
+<tr>
+<td>Middleware</td>
+<td><code>app/Http/Middleware/</code> (6)</td>
+<td>peran, status akun, header keamanan</td>
+</tr>
+<tr>
+<td>Controller</td>
+<td><code>app/Http/Controllers/</code> (29)</td>
+<td>HTTP, validasi, otorisasi</td>
+</tr>
+<tr>
+<td>Service</td>
+<td><code>app/Services/</code> (Notifications, Channels)</td>
+<td>notifikasi, kanal, tautan akun</td>
+</tr>
+<tr>
+<td>Support</td>
+<td><code>app/Support/</code> (AIService, ChatGuard, dsb.)</td>
+<td>chatbot, knowledge, pengenalan gambar</td>
+</tr>
+<tr>
+<td>Job</td>
+<td><code>app/Jobs/SendChannelReplyJob</code></td>
+<td>balasan kanal asinkron</td>
+</tr>
+<tr>
+<td>Model</td>
+<td><code>app/Models/</code> (17)</td>
+<td>relasi &amp; aturan data</td>
+</tr>
+<tr>
+<td>View</td>
+<td><code>resources/views/</code> (66)</td>
+<td>tampilan Bootstrap + tema</td>
+</tr>
+<tr>
+<td>AI eksternal</td>
+<td><code>ai-service/</code> (Python, YOLOv8)</td>
+<td>deteksi objek</td>
+</tr>
+<tr>
+<td>Konfigurasi</td>
+<td><code>config/services.php</code>, <code>config/notifications.php</code>, <code>config/ai.php</code></td>
+<td>integrasi &amp; saklar</td>
+</tr>
+<tr>
+<td>Pengujian</td>
+<td><code>tests/Feature|Unit</code> (40 file, 614 tes)</td>
+<td>jaring pengaman regresi</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h1>Testing & CI/CD</h1>
+<h1>TESTING &amp; CI/CD — AGUNG ATK</h1>
+<p><strong>Versi:</strong> 1.0 — 15 November 2026
+<strong>Berkas terkait:</strong> <code>phpunit.xml</code>, <code>tests/</code> (40 file), <code>.github/workflows/ci.yml</code></p>
+<hr>
+<h2>1. Strategi Pengujian</h2>
+<table>
+<thead>
+<tr>
+<th>Aspek</th>
+<th>Keputusan</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td><strong>PHPUnit</strong> (bawaan Laravel — lihat <code>composer.json</code> dev)</td>
+</tr>
+<tr>
+<td>Tipe test</td>
+<td><strong>Feature test dominan</strong> (HTTP + database nyata via Eloquent) + unit test ringan</td>
+</tr>
+<tr>
+<td>Database</td>
+<td><strong>SQLite <code>:memory:</code></strong> — terisolasi penuh, tidak menyentuh MySQL produksi</td>
+</tr>
+<tr>
+<td>Email/pesan</td>
+<td><code>MAIL_MAILER=array</code>, <code>NOTIFICATIONS_ENABLED=false</code>, <code>AI_API_KEY=''</code> — <strong>tidak pernah</strong> mengirim email/pesan/panggilan API berbayar saat suite berjalan</td>
+</tr>
+<tr>
+<td>HTTP eksternal</td>
+<td><code>Http::fake()</code> (WhatsApp, Telegram, LLM, YOLO)</td>
+</tr>
+<tr>
+<td>Queue</td>
+<td><code>QUEUE_CONNECTION=sync</code></td>
+</tr>
+<tr>
+<td>Cache/Sesi</td>
+<td><code>array</code> / sesi uji internal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Prinsip:</strong> setiap test memvalidasi <strong>perilaku nyata</strong> (response HTTP, isi database, pesan yang dikirim ke kanal via fake) — bukan sekadar "kode tidak error".</p>
+<hr>
+<h2>2. Inventaris Pengujian (40 file · 614 test · 2.908 asersi)</h2>
+<h3>2.1 Autentikasi, role &amp; akun</h3>
+<p><code>AuthTest</code>, <code>RoleAccessTest</code>, <code>AccountPagesTest</code>, <code>SecurityHeadersTest</code>, <code>ErrorPagesTest</code>, <code>ThemeTest</code>, <code>AppTimezoneTest</code></p>
+<h3>2.2 Bisnis penjualan</h3>
+<p><code>CatalogCartTest</code>, <code>CheckoutTest</code>, <code>OrderCancellationTest</code>, <code>PaymentManagementTest</code>, <code>ShipmentModuleTest</code>, <code>SellerModuleTest</code>, <code>ReviewTest</code>, <code>AdminCatalogTest</code>, <code>AdminManagementTest</code>, <code>DashboardReportTest</code>, <code>BusinessAuditTest</code>, <code>BarcodeScanTest</code></p>
+<h3>2.3 Notifikasi &amp; integrasi kanal</h3>
+<p><code>NotificationDispatchTest</code>, <code>NotificationSettingsTest</code>, <code>WhatsAppCloudApiTest</code>, <code>ChatbotChannelWebhookTest</code> (30 tes webhook WA/TG: verifikasi secret, dedupe, identitas kanal, job balasan)</p>
+<h3>2.4 Chatbot &amp; AI</h3>
+<p><code>HomeChatTest</code>, <code>ChatbotSimpleQuestionTest</code>, <code>ChatbotIdentityTest</code>, <code>ChatbotSystemMapTest</code>, <code>ChatbotSystemUnderstandingTest</code>, <code>ChatbotDataIntegrationTest</code>, <code>ChatbotIntelligenceTest</code>, <code>ChatbotCommandsTest</code> (perintah &amp; 12 bahasa), <code>AiAssistantTest</code>, <code>AiDatabaseContextTest</code></p>
+<h3>2.5 Computer vision (pencarian gambar)</h3>
+<p><code>ImageSearchTest</code>, <code>YoloImageSearchTest</code> (mock HTTP ke layanan YOLO: deteksi, fallback, ambang keyakinan)</p>
+<h3>2.6 Data &amp; integritas</h3>
+<p><code>ModelRelationTest</code>, <code>RelationshipTest</code></p>
+<hr>
+<h2>3. Cara Menjalankan</h2>
+<pre><code class="language-bash"># seluruh suite (±5,4 menit)
+php artisan test --compact
+
+# per file / per nama
+php artisan test --compact tests/Feature/ChatbotCommandsTest.php
+php artisan test --compact --filter=test_menu_command_returns_indonesian_help
+
+# formatter gaya kode
+vendor/bin/pint --test          # periksa
+vendor/bin/pint --dirty         # perbaiki file yang berubah
+</code></pre>
+<p><strong>Hasil terakhir (15 November 2026, dijalankan di workspace ini):</strong></p>
+<pre><code>{&quot;tool&quot;:&quot;phpunit&quot;,&quot;result&quot;:&quot;passed&quot;,&quot;tests&quot;:614,&quot;passed&quot;:614,&quot;assertions&quot;:2908,&quot;duration_ms&quot;:322222}
+</code></pre>
+<hr>
+<h2>4. Pipeline GitHub Actions (<code>.github/workflows/ci.yml</code>)</h2>
+<h3>4.1 Pemicu</h3>
+<p><code>push</code> ke <code>main</code>/<code>master</code> dan setiap <code>pull_request</code>.</p>
+<h3>4.2 Job <code>tests</code> (Unit &amp; Feature Tests)</h3>
+<ol>
+<li><strong>Checkout</strong> repository.</li>
+<li><strong>Setup PHP 8.3</strong> + ekstensi (<code>pdo_sqlite</code>, <code>mbstring</code>, <code>dom</code>, <code>curl</code>, <code>zip</code>, <code>fileinfo</code>, <code>openssl</code>).</li>
+<li><strong><code>composer install</code></strong> (tanpa interaksi, prefer dist).</li>
+<li><strong>Siapkan environment testing</strong> — salin <code>.env.example</code> → <code>.env</code>, <code>php artisan key:generate</code>.</li>
+<li><strong><code>vendor/bin/pint --test</code></strong> — pemeriksaan gaya kode; <strong>gagal bila ada file tidak sesuai format</strong>.</li>
+<li><strong>Migrasi database testing</strong> — <code>DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan migrate</code> (memvalidasi seluruh 25 migration).</li>
+<li><strong><code>php artisan test --compact</code></strong> — seluruh unit &amp; feature test; <strong>gagal bila ada test gagal</strong>.</li>
+</ol>
+<h3>4.3 Job <code>frontend</code> (Frontend Build)</h3>
+<ol>
+<li>Checkout → <strong>Setup Node.js 22</strong> → <code>npm install</code> → <strong><code>npm run build</code></strong> (Vite).
+   Catatan jujur: saat ini view memakai CDN + <code>&lt;style&gt;</code> inline (temuan audit A1); scaffold Vite tetap divalidasi agar tetap sehat bila diaktifkan kembali.</li>
+</ol>
+<h3>4.4 Jaminan kegagalan</h3>
+<p>Pipeline berstatus <strong>gagal (merah)</strong> bila: dependency tidak terpasang, Pint menolak format, migrasi error, test gagal, atau build gagal. Tidak ada langkah <code>continue-on-error</code>.</p>
+<hr>
+<h2>5. Status Eksekusi (jujur)</h2>
+<table>
+<thead>
+<tr>
+<th>Langkah</th>
+<th>Status</th>
+<th>Bukti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>composer install</code> + test lokal</td>
+<td>✅ Berhasil</td>
+<td>Suite 614/614 dijalankan di workspace</td>
+</tr>
+<tr>
+<td><code>pint --test</code> seluruh repo</td>
+<td>✅ Lolos</td>
+<td><code>vendor/bin/pint --test</code> → <code>passed</code></td>
+</tr>
+<tr>
+<td>Migrasi SQLite</td>
+<td>✅ Berhasil</td>
+<td>Dijalankan ulang setiap suite via <code>RefreshDatabase</code> (25 migration)</td>
+</tr>
+<tr>
+<td>Build Vite (<code>npm run build</code>)</td>
+<td>⚠️ <strong>Belum dieksekusi</strong></td>
+<td>Node.js tidak terpasang di mesin pengembangan</td>
+</tr>
+<tr>
+<td><strong>Eksekusi GitHub Actions</strong></td>
+<td>⚠️ <strong>Belum berjalan</strong></td>
+<td><strong>Remote GitHub belum ada</strong> (<code>git remote -v</code> kosong) — pipeline baru berjalan setelah repository di-push</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Klaim status pipeline <strong>hijau di GitHub</strong> baru boleh diberikan setelah job benar-benar berjalan di Actions. Instruksi penghubungan ada di §6.</p>
+</blockquote>
+<hr>
+<h2>6. Langkah Menghubungkan GitHub (untuk mahasiswa)</h2>
+<blockquote>
+<p>Nama akun/repository <strong>tidak dikarang</strong> — isi sendiri sesuai akun Anda.</p>
+</blockquote>
+<pre><code class="language-bash"># 1. Buat repository kosong di GitHub (tanpa README/.gitignore awal)
+# 2. Hubungkan dari lokal:
+git remote add origin https://github.com/&lt;username-mu&gt;/&lt;nama-repo&gt;.git
+git branch -M main
+git add .
+git commit -m &quot;feat: proyek akhir Agung ATK — aplikasi, AI, notifikasi, dokumen OBE&quot;
+git push -u origin main
+# 3. Buka tab Actions di repository — job CI akan berjalan otomatis.
+</code></pre>
+<p>Periksa hasilnya: <strong>Actions → CI → run hijau/merah</strong>. Jangan mengklaim hijau sebelum run terlihat.</p>
+<hr>
+<h2>7. Praktik Keamanan Pengujian</h2>
+<ul>
+<li>✅ Suite berjalan pada database <strong>terpisah</strong> (SQLite in-memory) — tidak ada aksi destruktif ke MySQL dev/produksi.</li>
+<li>✅ Tidak ada pengiriman email/pesan/HTTP berbayar saat test (mock + saklar <code>NOTIFICATIONS_ENABLED=false</code>).</li>
+<li>✅ Kredensial uji tidak ditulis ke file test (hanya value dummy seperti <code>test-key</code>).</li>
+<li>✅ Pengujian akses antarpengguna (lintas role &amp; lintas data) menjadi bagian suite regresi.</li>
+</ul>
+<hr>
+</body></html>

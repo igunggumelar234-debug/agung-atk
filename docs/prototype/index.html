@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype — Agung ATK (Sistem Informasi Penjualan ATK + AI)</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --text:#1f2430; --muted:#6b7280;
+    --primary:#2f6fed; --primary-soft:#e8f0ff; --border:#e5e7eb;
+    --ok:#16a34a; --warn:#d97706; --danger:#dc2626; --chip:#eef2ff;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1420; --surface:#171d2b; --text:#e8ecf4; --muted:#9aa4b8;
+    --primary:#5b93ff; --primary-soft:#1c2a45; --border:#2a3244;
+    --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --chip:#1e2740;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Plus Jakarta Sans",Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+  header.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;
+    padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .logo{font-weight:800;letter-spacing:.4px}
+  .logo span{color:var(--primary)}
+  .top .spacer{flex:1}
+  select,button{font:inherit;border:1px solid var(--border);background:var(--surface);color:var(--text);
+    border-radius:10px;padding:7px 12px;cursor:pointer}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .layout{display:flex;min-height:calc(100vh - 53px)}
+  nav.side{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:14px 10px}
+  nav.side h4{margin:6px 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  nav.side a{display:block;padding:9px 12px;border-radius:10px;color:var(--text);text-decoration:none;font-size:14px;margin-bottom:3px}
+  nav.side a.active,nav.side a:hover{background:var(--primary-soft);color:var(--primary)}
+  main{flex:1;padding:22px;max-width:1100px}
+  .screen{display:none;animation:fade .25s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:.2;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .hero{background:linear-gradient(135deg,var(--primary),#7c3aed);color:#fff;border-radius:18px;padding:34px}
+  .hero h1{margin:0 0 8px;font-size:28px}
+  .hero p{margin:0 0 18px;opacity:.92}
+  .searchbar{display:flex;gap:10px;flex-wrap:wrap}
+  .searchbar input{flex:1;min-width:220px;border:none;border-radius:10px;padding:12px 14px;font:inherit}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:18px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .card .thumb{height:110px;display:flex;align-items:center;justify-content:center;font-size:34px;
+    background:var(--primary-soft)}
+  .card .body{padding:12px}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .price{color:var(--primary);font-weight:700}
+  .chip{display:inline-block;background:var(--chip);color:var(--primary);border-radius:999px;
+    padding:2px 10px;font-size:12px;margin-right:6px}
+  .badge{border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
+  .badge.ok{background:#dcfce7;color:var(--ok)} .badge.warn{background:#fef3c7;color:var(--warn)}
+  .badge.danger{background:#fee2e2;color:var(--danger)} .badge.info{background:var(--primary-soft);color:var(--primary)}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:14px}
+  th{background:var(--primary-soft);color:var(--primary)}
+  tr:last-child td{border-bottom:none}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .stat b{display:block;font-size:24px;color:var(--primary)}
+  .stat span{color:var(--muted);font-size:13px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:16px}
+  .chat{display:flex;flex-direction:column;height:420px}
+  .msgs{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+  .m{max-width:78%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.45}
+  .m.user{align-self:flex-end;background:var(--primary);color:#fff}
+  .m.bot{align-self:flex-start;background:var(--primary-soft)}
+  .chatbox{display:flex;gap:8px;margin-top:10px}
+  .chatbox input{flex:1;border:1px solid var(--border);border-radius:10px;padding:11px 13px;font:inherit;background:var(--bg);color:var(--text)}
+  .note{background:var(--chip);border-left:4px solid var(--primary);padding:10px 14px;border-radius:8px;font-size:14px;margin-top:12px}
+  .steps{counter-reset:s;list-style:none;padding:0}
+  .steps li{counter-increment:s;position:relative;padding:10px 0 10px 44px;border-bottom:1px dashed var(--border);font-size:14px}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:9px;width:28px;height:28px;border-radius:50%;
+    background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+  footer{padding:18px;color:var(--muted);font-size:13px;text-align:center}
+  @media(max-width:820px){nav.side{display:none}main{padding:14px}}
+</style>
+</head>
+<body data-theme="light">
+
+<header class="top">
+  <div class="logo">AGUNG <span>ATK</span> — Prototype</div>
+  <div class="spacer"></div>
+  <label style="font-size:13px;color:var(--muted)">Lihat sebagai:
+    <select id="roleSel">
+      <option value="tamu">Tamu</option>
+      <option value="pelanggan" selected>Pelanggan</option>
+      <option value="anggota">Anggota (Pegawai)</option>
+      <option value="kurir">Kurir</option>
+      <option value="admin">Admin</option>
+    </select>
+  </label>
+  <button id="themeBtn" title="Mode terang/gelap">🌙 Gelap</button>
+</header>
+
+<div class="layout">
+  <nav class="side" id="sideNav">
+    <h4>Menu</h4>
+    <a href="#" data-screen="beranda" class="active">Beranda</a>
+    <a href="#" data-screen="katalog">Katalog &amp; Cari Gambar</a>
+    <a href="#" data-screen="checkout">Checkout &amp; Lacak</a>
+    <a href="#" data-screen="chatbot">Chatbot AI</a>
+    <a href="#" data-screen="dashboard">Dashboard Role</a>
+    <h4 style="margin-top:14px">Dokumen</h4>
+    <a href="../PRD_SRS_AGUNG_ATK.md" target="_blank">PRD / SRS</a>
+    <a href="../uml/use_case.md" target="_blank">Diagram UML</a>
+  </nav>
+
+  <main>
+    <!-- ============ BERANDA ============ -->
+    <section class="screen active" id="s-beranda">
+      <div class="hero">
+        <h1>Semua kebutuhan ATK ada di sini</h1>
+        <p>Katalog lengkap, stok real-time, pesanan terlacak — plus asisten AI &amp; pencarian produk lewat foto.</p>
+        <div class="searchbar">
+          <input id="homeSearch" placeholder="Cari: kertas A4, pulpen, stabilo…">
+          <button class="primary" onclick="go('katalog')">🔍 Cari</button>
+          <button onclick="go('katalog')">📷 Foto untuk cari barang</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card"><div class="thumb">📄</div><div class="body"><h3>Kertas HVS A4 70gsm</h3>
+          <div class="price">Rp 45.000</div><span class="chip">Stok 120</span></div></div>
+        <div class="card"><div class="thumb">🖊️</div><div class="body"><h3>Pulpen Gel Hitam</h3>
+          <div class="price">Rp 8.500</div><span class="chip">Stok 64</span></div></div>
+        <div class="card"><div class="thumb">📁</div><div class="body"><h3>Ordner Bantex F4</h3>
+          <div class="price">Rp 62.000</div><span class="chip">Stok 18</span></div></div>
+        <div class="card"><div class="thumb">✏️</div><div class="body"><h3>Pensil 2B Joyko</h3>
+          <div class="price">Rp 3.000</div><span class="chip">Stok 210</span></div></div>
+      </div>
+      <div class="note">💡 Tamu dapat menjelajah katalog &amp; mencoba chatbot dasar. Fitur belanja membutuhkan login
+        (otorisasi per role: Admin · Anggota · Kurir · Pelanggan).</div>
+    </section>
+
+    <!-- ============ KATALOG + PENCARIAN GAMBAR ============ -->
+    <section class="screen" id="s-katalog">
+      <h2>Katalog &amp; Pencarian Produk</h2>
+      <div class="panel">
+        <h3 style="margin-top:0">📷 Cari lewat foto (Computer Vision — YOLOv8)</h3>
+        <p style="color:var(--muted);font-size:14px">Foto diambil dari kamera/unggah → layanan <code>ai-service</code>
+          mendeteksi jenis barang → dicocokkan ke katalog.</p>
+        <div class="searchbar">
+          <button class="primary" onclick="imgSearch('atk')">Simulasi foto: barang ATK</button>
+          <button onclick="imgSearch('bukan')">Simulasi foto: bukan barang ATK</button>
+          <button onclick="imgSearch('habis')">Simulasi foto: ATK stok habis</button>
+        </div>
+        <div id="imgResult"></div>
+      </div>
+      <div class="panel">
+        <div class="searchbar">
+          <input id="catSearch" placeholder="Filter nama/merk…">
+          <button class="primary" onclick="filterCat()">Terapkan</button>
+        </div>
+        <div class="grid" id="catGrid"></div>
+      </div>
+    </section>
+
+    <!-- ============ CHECKOUT & LACAK ============ -->
+    <section class="screen" id="s-checkout">
+      <h2>Checkout &amp; Pelacakan Pesanan</h2>
+      <div class="panel">
+        <h3 style="margin-top:0">Keranjang (2 barang)</h3>
+        <table>
+          <tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
+          <tr><td>Kertas HVS A4 70gsm</td><td>Rp 45.000</td><td>2</td><td>Rp 90.000</td></tr>
+          <tr><td>Pulpen Gel Hitam</td><td>Rp 8.500</td><td>3</td><td>Rp 25.500</td></tr>
+          <tr><th colspan="3">Grand total</th><th>Rp 115.500</th></tr>
+        </table>
+        <div class="searchbar" style="margin-top:12px">
+          <button class="primary" onclick="alert('Prototype: pada aplikasi nyata, checkout menjalankan TRANSAKSI database — membuat orders + order_details + mengurangi stok (lihat Activity Diagram §5).')">Buat Pesanan</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Status pesanan saya — ORD-20261115-001</h3>
+        <ol class="steps">
+          <li><b>Pesanan dibuat</b> — notifikasi Telegram/Email terkirim ke pelanggan <span class="badge ok">selesai</span></li>
+          <li><b>Pembayaran menunggu verifikasi</b> — bukti transfer diunggah <span class="badge warn">menunggu</span></li>
+          <li><b>Verifikasi admin</b> — pembayaran diverifikasi <span class="badge info">berikutnya</span></li>
+          <li><b>Penugasan kurir</b> — resi TRK-20261115-01 dibuat <span class="badge info">→</span></li>
+          <li><b>Pengiriman &amp; selesai</b> — kurir memperbarui status <span class="badge info">→</span></li>
+        </ol>
+        <div class="note">Pada aplikasi nyata, tiap langkah memicu <code>NotificationManager</code> dan tercatat di
+          <code>notification_logs</code> + <code>activity_logs</code>.</div>
+      </div>
+    </section>
+
+    <!-- ============ CHATBOT ============ -->
+    <section class="screen" id="s-chatbot">
+      <h2>Chatbot AI</h2>
+      <div class="panel chat">
+        <div class="msgs" id="msgs">
+          <div class="m bot">Halo! Saya asisten Agung ATK. Saya bisa bantu info produk, stok, pesanan, panduan fitur —
+            atau jawab pertanyaan umum. Coba ketik <b>/menu</b>, <b>piye kabare</b>, atau pertanyaan bebas.</div>
+        </div>
+        <div class="chatbox">
+          <input id="chatIn" placeholder="Tulis pesan / perintah…" onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="primary" onclick="sendChat()">Kirim</button>
+        </div>
+      </div>
+      <div class="note">Alur nyata: ChatGuard (pagaran input) → perintah lokal → intent data read-only (scope role)
+        → provider LLM → ChatGuard (pagaran output). Bila API AI tak tersedia, balasan fallback jujur.</div>
+    </section>
+
+    <!-- ============ DASHBOARD PER ROLE ============ -->
+    <section class="screen" id="s-dashboard">
+      <h2 id="dashTitle">Dashboard</h2>
+      <div id="dashBody"></div>
+    </section>
+  </main>
+</div>
+
+<footer>Prototype rancangan UI/UX — Agung ATK · Dokumen: <code>docs/SDD_ARSITEKTUR_AGUNG_ATK.md</code> ·
+  Bukan tangkapan layar aplikasi nyata; halaman aplikasi adalah sumber kebenaran.</footer>
+
+<script>
+const PRODUCTS=[
+  {n:"Kertas HVS A4 70gsm",p:45000,s:120,e:"📄"},{n:"Pulpen Gel Hitam",p:8500,s:64,e:"🖊️"},
+  {n:"Ordner Bantex F4",p:62000,s:18,e:"📁"},{n:"Pensil 2B Joyko",p:3000,s:210,e:"✏️"},
+  {n:"Stabilo Highlighter",p:12500,s:0,e:"🖍️"},{n:"Buku Tulis Kiky 38 Lembar",p:6500,s:150,e:"📕"}];
+
+function go(name){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("s-"+name).classList.add("active");
+  document.querySelectorAll("#sideNav a").forEach(a=>a.classList.toggle("active",a.dataset.screen===name));
+  if(name==="dashboard")renderDash();
+}
+document.querySelectorAll("#sideNav a[data-screen]").forEach(a=>{
+  a.addEventListener("click",e=>{e.preventDefault();go(a.dataset.screen);});});
+
+document.getElementById("themeBtn").onclick=()=>{
+  const cur=document.body.dataset.theme;
+  const next=cur==="light"?"dark":"light";
+  document.body.dataset.theme=next;
+  document.getElementById("themeBtn").textContent=next==="light"?"🌙 Gelap":"☀️ Terang";
+};
+
+/* ---------- katalog ---------- */
+function renderCat(list){
+  document.getElementById("catGrid").innerHTML=list.map(p=>`
+    <div class="card"><div class="thumb">${p.e}</div><div class="body">
+      <h3>${p.n}</h3><div class="price">Rp ${p.p.toLocaleString("id-ID")}</div>
+      ${p.s>0?`<span class="chip">Stok ${p.s}</span>`:`<span class="badge danger">Stok Kosong</span>`}
+    </div></div>`).join("");
+}
+function filterCat(){
+  const q=document.getElementById("catSearch").value.toLowerCase();
+  renderCat(PRODUCTS.filter(p=>p.n.toLowerCase().includes(q)));
+}
+renderCat(PRODUCTS);
+
+/* ---------- simulasi pencarian gambar ---------- */
+function imgSearch(kind){
+  const box=document.getElementById("imgResult");
+  if(kind==="bukan"){
+    box.innerHTML=`<div class="note" style="border-left-color:var(--danger)">
+      <b>Barang Tidak Sesuai Kriteria Toko</b> — gambar tidak dikenali sebagai produk ATK.</div>`;return;}
+  if(kind==="habis"){
+    const p=PRODUCTS.find(x=>x.s===0);
+    box.innerHTML=`<div class="note" style="border-left-color:var(--warn)">
+      <b>Stok Kosong</b> — terdeteksi: ${p.n} (tersedia saat stok diisi ulang).</div>`;return;}
+  const p=PRODUCTS[0];
+  box.innerHTML=`<div class="note">✅ Terdeteksi: <b>${p.n}</b> (keyakinan 0.93)
+    <div class="grid" style="margin-top:10px">${PRODUCTS.slice(0,3).map(x=>`
+      <div class="card"><div class="thumb">${x.e}</div><div class="body"><h3>${x.n}</h3>
+      <div class="price">Rp ${x.p.toLocaleString("id-ID")}</div><span class="chip">Stok ${x.s}</span></div></div>`).join("")}
+    </div></div>`;
+}
+
+/* ---------- chatbot simulasi ---------- */
+function push(who,text){
+  const d=document.createElement("div");d.className="m "+who;d.innerHTML=text;
+  const m=document.getElementById("msgs");m.appendChild(d);m.scrollTop=m.scrollHeight;}
+function sendChat(){
+  const i=document.getElementById("chatIn");const t=i.value.trim();if(!t)return;i.value="";
+  push("user",t);const l=t.toLowerCase();let r;
+  if(l.startsWith("/menu")||l.startsWith("/help")||l.startsWith("/bantuan"))
+    r="Menu bantuan Agung ATK:<br>- /stok &lt;produk&gt; — cek ketersediaan &amp; harga<br>- /produk &lt;kebutuhan&gt; — rekomendasi produk<br>- /pesanan — status pesanan Anda<br>- /lacak &lt;nomor/resi&gt; — lacak ORD-… / TRK-…";
+  else if(l.startsWith("/stok"))
+    r="Stok produk (data toko saat ini):<br>1. Kertas HVS A4 — Rp 45.000 | stok 120 pcs<br>2. Pulpen Gel Hitam — Rp 8.500 | stok 64 pcs";
+  else if(l.startsWith("/pesanan"))
+    r="Pesanan ORD-20261115-001: status <b>pending</b>, Rp 115.500 — pembayaran menunggu verifikasi admin.";
+  else if(l.startsWith("/lacak"))
+    r="Pengiriman resi TRK-20261115-01: status shipping — kurir Kurir Uji. Rincian ada di menu Pesanan Saya.";
+  else if(/piye|kabare/.test(l))
+    r="Halo! Kula asisten virtual Agung ATK, siap ngrewangi sampeyan. Kula bisa menehi info produk lan stok, status pesanan, lan panduan fitur toko.";
+  else if(/^(hi|hello|halo|hai)\b/.test(l))
+    r="Halo! Ada yang bisa saya bantu — info produk, cek stok, status pesanan, atau panduan fitur Agung ATK?";
+  else if(/siapa kamu/.test(l))
+    r="Saya asisten AI resmi untuk Sistem Informasi Penjualan Agung ATK (berbasis Laravel + AI). Saya membantu menjawab seputar produk, pesanan, dan panduan aplikasi sesuai peran Anda.";
+  else if(/siapa saya/.test(l))
+    r="Anda masuk sebagai <b>Pelanggan</b> (dari sesi login, bukan ketikan). Saya hanya menampilkan data yang berhak Anda akses.";
+  else
+    r="Mode prototype: jawaban umum berasal dari provider LLM (butuh API key valid). Tanpa koneksi AI, aplikasi nyata menjawab jujur: <i>“Saya belum memiliki informasi yang cukup… saya tidak boleh mengarang jawaban.”</i>";
+  setTimeout(()=>push("bot",r),350);
+}
+
+/* ---------- dashboard per role ---------- */
+const DASH={
+  admin:{t:"Dashboard Administrator",h:`
+    <div class="stats">
+      <div class="stat"><b>Rp 4.850.000</b><span>Penjualan 30 hari</span></div>
+      <div class="stat"><b>8</b><span>Pesanan</span></div>
+      <div class="stat"><b>8</b><span>Produk aktif</span></div>
+      <div class="stat"><b>2</b><span>Menunggu verifikasi bayar</span></div>
+    </div>
+    <div class="panel"><h3 style="margin-top:0">Pesanan terbaru</h3>
+      <table><tr><th>No. Pesanan</th><th>Pembeli</th><th>Total</th><th>Status</th></tr>
+      <tr><td>ORD-001</td><td>Budi</td><td>Rp 115.500</td><td><span class="badge warn">pending</span></td></tr>
+      <tr><td>ORD-002</td><td>Siti</td><td>Rp 240.000</td><td><span class="badge info">shipping</span></td></tr>
+      <tr><td>ORD-003</td><td>Andi</td><td>Rp 78.000</td><td><span class="badge ok">completed</span></td></tr></table></div>
+    <div class="panel"><h3 style="margin-top:0">Integrasi &amp; notifikasi</h3>
+      <p style="font-size:14px">Email SMTP ✅ teruji · Telegram ✅ teruji · WhatsApp ⏸️ menunggu kredensial Meta ·
+      Uji Koneksi tersedia di menu Notifikasi.</p></div>`},
+  anggota:{t:"Dashboard Anggota (Pegawai Toko)",h:`
+    <div class="stats">
+      <div class="stat"><b>3</b><span>Pesanan perlu diproses</span></div>
+      <div class="stat"><b>2</b><span>Stok menipis</span></div>
+      <div class="stat"><b>8</b><span>Produk dikelola</span></div>
+    </div>
+    <div class="panel"><h3 style="margin-top:0">Stok menipis</h3>
+      <table><tr><th>Produk</th><th>Stok</th><th>Min.</th></tr>
+      <tr><td>Stabilo Highlighter</td><td><span class="badge danger">0</span></td><td>10</td></tr>
+      <tr><td>Ordner Bantex F4</td><td><span class="badge warn">18</span></td><td>20</td></tr></table>
+      <div class="searchbar" style="margin-top:10px"><button class="primary">📦 Pindai Barcode</button></div></div>`},
+  kurir:{t:"Dashboard Kurir",h:`
+    <div class="panel"><h3 style="margin-top:0">Tugas pengiriman saya</h3>
+      <table><tr><th>Resi</th><th>Pesanan</th><th>Alamat</th><th>Status</th><th>Aksi</th></tr>
+      <tr><td>TRK-01</td><td>ORD-002</td><td>Jl. Merdeka 12</td><td><span class="badge info">shipping</span></td>
+        <td><button class="primary">Tandai Diterima</button></td></tr></table>
+      <div class="note">Kurir hanya melihat pengiriman yang ditugaskan kepadanya (scope role di server).</div></div>`},
+  pelanggan:{t:"Dashboard Pelanggan",h:`
+    <div class="stats">
+      <div class="stat"><b>3</b><span>Pesanan aktif</span></div>
+      <div class="stat"><b>1</b><span>Menunggu bayar</span></div>
+      <div class="stat"><b>12</b><span>Total pesanan</span></div>
+    </div>
+    <div class="panel"><h3 style="margin-top:0">Pesanan saya</h3>
+      <table><tr><th>No.</th><th>Tanggal</th><th>Total</th><th>Status</th></tr>
+      <tr><td>ORD-001</td><td>15 Nov 2026</td><td>Rp 115.500</td><td><span class="badge warn">pending</span></td></tr>
+      <tr><td>ORD-012</td><td>02 Nov 2026</td><td>Rp 64.000</td><td><span class="badge ok">completed</span></td></tr></table></div>`},
+  tamu:{t:"Beranda Tamu",h:`
+    <div class="panel"><p style="margin-top:0">Anda melihat sebagai <b>Tamu</b>. Tersedia: katalog, detail produk,
+      pencarian gambar, dan chatbot dasar.</p>
+      <p>Untuk belanja (keranjang, checkout, lacak pesanan) silakan <b>daftar/masuk</b> —
+      role otomatis dikenali setelah login.</p>
+      <button class="primary">Masuk / Daftar</button></div>`}
+};
+function renderDash(){
+  const r=document.getElementById("roleSel").value;const d=DASH[r];
+  document.getElementById("dashTitle").textContent=d.t;
+  document.getElementById("dashBody").innerHTML=d.h;
+}
+document.getElementById("roleSel").onchange=()=>{
+  renderDash();
+  const r=document.getElementById("roleSel").value;
+  push("bot","Role berubah menjadi <b>"+r+"</b> — menu &amp; data dashboard menyesuaikan (otorisasi di server).");
+};
+renderDash();
+</script>
+</body>
+</html>

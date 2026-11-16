@@ -10,6 +10,60 @@ sehingga aplikasi berjalan tanpa intervensi manual setelah prasyarat di bawah te
 
 ---
 
+## Identitas Proyek
+
+| | |
+|---|---|
+| Nama Mahasiswa | `[NAMA MAHASISWA]` |
+| NIM | `[NIM]` |
+| Kelompok | `[KELOMPOK]` |
+| Tema Topik Kelompok | `[TEMA TOPIK]` |
+| Mata Kuliah | Rekayasa Perangkat Lunak (TIKB2503021) — STMIK IKMI Cirebon |
+| Repository | `[URL REPOSITORY GITHUB]` |
+
+> Placeholder `[...]` sengaja belum diisi — jangan mengarang identitas/tautan.
+
+### Tautan Video
+
+| Video | Tautan |
+|---|---|
+| Video Progres 1 — PRD & Konsep (3–5 menit) | `[LINK VIDEO PROGRES 1]` |
+| Video Progres 2 — UML & UI/UX (5–7 menit) | `[LINK VIDEO PROGRES 2]` |
+| Video Final — Live Demo (8–12 menit) | `[LINK VIDEO FINAL]` |
+
+Naskah siap rekam: [`docs/PANDUAN_VIDEO_PRESENTASI.md`](docs/PANDUAN_VIDEO_PRESENTASI.md).
+
+---
+
+## Ringkasan Proyek
+
+**Deskripsi.** Aplikasi web penjualan Alat Tulis Kerja untuk toko di Kabupaten Kuningan:
+katalog digital, keranjang–checkout–pesanan, verifikasi pembayaran, penugasan kurir,
+laporan, notifikasi multi-kanal, serta integrasi AI (chatbot & pencarian gambar).
+
+**Tujuan.**
+1. Mengelola katalog, stok, dan transaksi ATK secara terintegrasi dan akurat.
+2. Menegakkan hak akses ketat untuk empat peran dengan jejak audit.
+3. Mengirim notifikasi otomatis (Telegram/WhatsApp/Email) pada kejadian bisnis.
+4. Menjawab pertanyaan pengguna lewat **chatbot AI** yang memahami aplikasi & data toko
+   (tanpa akses SQL bebas) dan **pencarian produk lewat foto** (computer vision).
+
+**Teknologi.** PHP 8.3 · Laravel 13 · MySQL 8 · Blade + Bootstrap 5.3 · Queue database ·
+Python + YOLOv8 (`ai-service/`) · PHPUnit.
+
+**Fitur utama.** Autentikasi 4 role · katalog + barcode scan · keranjang/checkout bertransaksi ·
+pembayaran & verifikasi · pengiriman berjenjang (admin→kurir) · laporan + ekspor/cetak ·
+audit log · tema terang/gelap · halaman error ramah · backup database.
+
+**Fitur AI (yang benar-benar diimplementasikan).**
+- **Chatbot berlapis:** pagaran input (`ChatGuard`) → perintah lokal (`/menu`, `/stok`, `/pesanan`, `/lacak`, …) → **intent data read-only** diskop per role → provider LLM → pagaran output; identitas dari role session; jawaban fallback jujur bila API AI tidak tersedia; multi-bahasa.
+- **Pencarian produk lewat foto:** deteksi objek **YOLOv8** (model dilatih sendiri, `ai-service/`) dengan fallback otomatis; hasil wajar: saran produk, "Barang Tidak Sesuai Kriteria Toko", atau "Stok Kosong".
+- **Bukan** klaim: RAG, vector database, atau model berjalan lokal (lihat PRD §19.7).
+
+**Aktor sistem.** Admin · Anggota (pegawai toko) · Kurir · Pelanggan · Tamu (katalog + chatbot dasar).
+
+---
+
 ## Daftar Isi
 
 1. [Cara Instalasi Awal](#1-cara-instalasi-awal)
@@ -24,6 +78,8 @@ sehingga aplikasi berjalan tanpa intervensi manual setelah prasyarat di bawah te
 10. [Hak Akses per Peran](#hak-akses-per-peran)
 11. [Pengujian](#pengujian)
 12. [Status Prasyarat (Kejujuran Operasional)](#status-prasyarat-kejujuran-operasional)
+13. [Dokumentasi Proyek](#dokumentasi-proyek)
+14. [Screenshot Aplikasi](#screenshot-aplikasi)
 
 ---
 
@@ -94,7 +150,7 @@ Kunci API/hanya diisi **setelah** `.env` terbentuk — jangan pernah menaruhnya 
 
 ```bash
 # Buat database MySQL dulu, lalu sesuaikan DB_* di .env
-php artisan migrate              # 23 migration (roles, users, produk, pesanan, audit, dst.)
+php artisan migrate              # 25 migration (roles, users, produk, pesanan, audit, notifikasi, kanal, dst.)
 php artisan db:seed              # seluruh seeder (RoleSeeder, UserSeeder, produk, pesanan contoh)
 ```
 
@@ -458,11 +514,12 @@ vendor/bin/pint --dirty --format agent                 # format kode setelah edi
 
 Hasil verifikasi terakhir:
 
-* **PHPUnit: 393/393 tes lulus (1985 assertions)** — termasuk tes otomasi stok,
-  pembatalan anti-double-restore, proteksi checkout ganda, audit bisnis, dan halaman error.
+* **PHPUnit: 620/620 tes lulus (2.940 asersi)** — 17 November 2026 (`php artisan test --compact`),
+  mencakup otomasi stok, pembatalan anti-double-restore, proteksi checkout ganda, audit bisnis,
+  halaman error, seluruh chatbot (identitas/perintah/intent data/webhook), notifikasi, dan pencarian gambar YOLO.
 * **E2E audit (server hidup): 115/115 cek lulus, 0 broken link** — crawl semua halaman
   untuk 4 peran + tamu, marker error, RBAC 403, halaman 404 ramah, kartu pembatalan.
-* **Pint:** bersih · **Nama route:** 0 duplikat.
+* **Pint:** `vendor/bin/pint --test` lolos seluruh repo · **Nama route:** 0 duplikat.
 
 Cakupan otomasi/hak akses mencakup antara lain: checkout mengurangi stok sekali,
 pembatalan mengembalikan stok tepat sekali (anti dobel), proteksi checkout ganda,
@@ -493,23 +550,78 @@ Agar tidak menyesatkan — komponen yang **belum tentu aktif** di lingkungan And
    selalu manual + persetujuan (aturan: jangan menjalankan migrasi destruktif
    atau menghapus data produksi tanpa izin).
 
+### Status Integrasi Terkini (jujur — 17 November 2026)
+
+| Integrasi | Status | Keterangan |
+|---|---|---|
+| Email (SMTP) | ✅ Teruji nyata | Uji kirim dari halaman admin → diterima Mailpit |
+| Telegram — pengiriman | ✅ Teruji nyata | `getMe` sukses: bot `AGUNGATK_bot` |
+| Telegram — webhook masuk | ⏸️ Menunggu | Keputusan username bot + URL HTTPS publik |
+| WhatsApp Cloud API | ⏸️ Menunggu | Mekanisme lengkap teruji mock; kredensial Meta diperlukan |
+| Chatbot mode API (LLM) | ⏸️ Menunggu | Kunci saat ini ditolak 401 → mode lokal aktif & teruji |
+| YOLOv8 (pencarian gambar) | ✅ Aktif | `ai-service/server.py` port 8090, model terlatih |
+| GitHub Actions | ⏸️ Menunggu push | Workflow siap di `.github/workflows/ci.yml` |
+
+---
+
+## Dokumentasi Proyek
+
+| Dokumen | Isi |
+|---|---|
+| [`docs/AUDIT_PROYEK_AGUNG_ATK.md`](docs/AUDIT_PROYEK_AGUNG_ATK.md) | Audit menyeluruh + pemetaan rubrik OBE |
+| [`docs/PRD_SRS_AGUNG_ATK.md`](docs/PRD_SRS_AGUNG_ATK.md) | PRD/SRS 20 bagian (IEEE 830), user story + acceptance criteria |
+| [`docs/SDD_ARSITEKTUR_AGUNG_ATK.md`](docs/SDD_ARSITEKTUR_AGUNG_ATK.md) | Arsitektur, audit UI/UX, keterkaitan diagram↔kode |
+| [`docs/uml/`](docs/uml/) | Use Case, Activity, Class, Sequence, ERD (Mermaid) |
+| [`docs/prototype/index.html`](docs/prototype/index.html) | Prototype interaktif (buka langsung di browser) |
+| [`docs/TESTING_CI_CD_AGUNG_ATK.md`](docs/TESTING_CI_CD_AGUNG_ATK.md) | Strategi tes + pipeline GitHub Actions |
+| [`docs/PANDUAN_VIDEO_PRESENTASI.md`](docs/PANDUAN_VIDEO_PRESENTASI.md) | Naskah 3 video + rubrik khusus video |
+| [`docs/LAPORAN_AKHIR_AGUNG_ATK.md`](docs/LAPORAN_AKHIR_AGUNG_ATK.md) | Laporan akhir akademik |
+| [`docs/EVALUASI_RUBRIK_OBE_AGUNG_ATK.md`](docs/EVALUASI_RUBRIK_OBE_AGUNG_ATK.md) | Penilaian mandiri rubrik OBE |
+| [`docs/CHATBOT_SYSTEM_KNOWLEDGE.md`](docs/CHATBOT_SYSTEM_KNOWLEDGE.md) | Basis pengetahuan chatbot |
+| [`docs/CHATBOT_WHATSAPP_TELEGRAM_SETUP.md`](docs/CHATBOT_WHATSAPP_TELEGRAM_SETUP.md) | Panduan konfigurasi webhook kanal |
+| [`docs/NOTIFICATION_INTEGRATION.md`](docs/NOTIFICATION_INTEGRATION.md) | Pusat integrasi notifikasi: kanal, kejadian per peran, status uji nyata |
+| [`docs/WHATSAPP_SETUP.md`](docs/WHATSAPP_SETUP.md) | Panduan WhatsApp Cloud API |
+| [`docs/TELEGRAM_SETUP.md`](docs/TELEGRAM_SETUP.md) | Panduan Telegram Bot API + webhook dua arah |
+| [`docs/GMAIL_SETUP.md`](docs/GMAIL_SETUP.md) | Panduan email Gmail (App Password SMTP) |
+| [`docs/CHATBOT_DATABASE_KNOWLEDGE.md`](docs/CHATBOT_DATABASE_KNOWLEDGE.md) | Struktur database untuk chatbot + pembaruan pengetahuan |
+| [`docs/CHATBOT_SECURITY.md`](docs/CHATBOT_SECURITY.md) | Pagar keamanan & privasi chatbot |
+
+---
+
+## Screenshot Aplikasi
+
+Diambil langsung dari aplikasi yang berjalan (17 November 2026):
+
+| | |
+|---|---|
+| **Beranda (publik + widget chatbot)** | ![Beranda](docs/screenshots/01-beranda.png) |
+| **Katalog & pencarian gambar** | ![Katalog](docs/screenshots/02-katalog.png) |
+| **Dashboard Administrator** | ![Dashboard Admin](docs/screenshots/03-dashboard-admin.png) |
+| **Pengaturan notifikasi (status saluran jujur)** | ![Notifikasi](docs/screenshots/04-notifikasi.png) |
+| **Chatbot — perintah `/menu`** | ![Chatbot](docs/screenshots/05-chatbot.png) |
+
 ---
 
 ## Struktur Singkat
 
 ```
-app/Http/Middleware/      admin, anggota, courier, customer, EnsureAccountIsActive
-app/Http/Controllers/     Admin/ Anggota/ Courier/ Seller/ Auth/ + utama (checkout, orders)
-app/Services/             OrderCancellationService, Notifications/ (5 saluran+kejadian)
-app/Models/               Order, Payment, Shipment, Product, User, ActivityLog, ...
-app/Support/              AIService, CartSession, ShipmentStatus
-database/migrations/      23 migration (termasuk migrasi role & audit)
+app/Http/Middleware/      admin, anggota, courier, customer, EnsureAccountIsActive, SecurityHeaders
+app/Http/Controllers/     Admin/ Anggota/ Auth/ Courier/ Seller/ + utama (checkout, orders, AI, webhook)
+app/Services/             OrderCancellationService, Notifications/ (5 saluran+kejadian), Channels/
+app/Jobs/                 SendChannelReplyJob (balasan chatbot via kanal, retry 3x)
+app/Models/               Order, Payment, Shipment, Product, User, ActivityLog, ChannelIdentity, ...
+app/Support/              AIService, ChatGuard, ChatbotDataService, ChatbotProfile,
+                          DatabaseKnowledgeService, WorkflowKnowledge, CartSession, ShipmentStatus
+database/migrations/      25 migration (termasuk role, audit, notifikasi, kanal chatbot)
 resources/views/          layouts, admin/, anggota/, courier/, errors/ (halaman error ramah)
-routes/web.php            route per peran (95 nama route unik)
+routes/web.php            111 route (publik + per peran)
 routes/console.php        scheduler (ringkasan harian + pruning)
+ai-service/               layanan Python YOLOv8 (server.py, train.py, model terlatih)
+docs/                     PRD/SRS, SDD+UML, audit, testing/CI-CD, panduan video, laporan akhir
 deploy/                   contoh Supervisor, systemd, crontab untuk produksi
 scripts/                  backup database (bash + PowerShell)
-tests/Feature/            seluruh suite pengujian fitur
+tests/                    40 file — 620 tes fitur & unit
+.github/workflows/        ci.yml (PHPUnit + Pint + build Vite)
 ```
 
 ---
