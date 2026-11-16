@@ -6,9 +6,14 @@ use App\Models\Order;
 use App\Models\Role;
 use App\Models\Shipment;
 use App\Models\User;
+use App\Support\DatabaseKnowledgeService;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -234,5 +239,57 @@ class AiDatabaseContextTest extends TestCase
         // Anggota TIDAK mendapat daftar akun user lain (privasi peran)
         $this->assertStringNotContainsString('user_terbaru', $prompt);
         $this->assertStringNotContainsString('@agungatk.com', $prompt);
+    }
+
+    /* =====================================================================
+     | PENGETAHUAN SKEMA: DISCOVERI DINAMIS & PENYEGARAN CACHE
+     * ===================================================================*/
+
+    public function test_schema_knowledge_discovers_domain_tables_and_excludes_framework(): void
+    {
+        $tables = (new DatabaseKnowledgeService)->appTables();
+
+        // Tabel domain ikut dikenali — bukan daftar statis (termasuk
+        // channel_identities yang dahulu tidak ada di whitelist lama).
+        $this->assertContains('channel_identities', $tables);
+        $this->assertContains('orders', $tables);
+        $this->assertNotContains('migrations', $tables);
+        $this->assertNotContains('jobs', $tables);
+
+        // Tabel BARU otomatis dikenali tanpa mengubah kode aplikasi.
+        Schema::create('zz_probe_baru', function (Blueprint $table): void {
+            $table->id();
+            $table->string('keterangan');
+        });
+
+        // Sebelum penyegaran: cache lama masih berlaku (perubahan di luar
+        // artisan migrate tidak langsung menghapus cache).
+        $this->assertNotContains(
+            'zz_probe_baru',
+            (new DatabaseKnowledgeService)->appTables()
+        );
+
+        // Penyegaran via perintah artisan -> tabel baru langsung terbaca,
+        // dengan deskripsi jujur dari kolom nyata (bukan mengarang fungsi).
+        $this->artisan('chatbot:refresh-knowledge')->assertSuccessful();
+
+        $fresh = new DatabaseKnowledgeService;
+        $this->assertContains('zz_probe_baru', $fresh->appTables());
+        $this->assertStringContainsString('keterangan', $fresh->explainTable('zz_probe_baru'));
+    }
+
+    public function test_schema_cache_is_forgotten_when_migrations_end(): void
+    {
+        // Bangun cache lebih dulu.
+        (new DatabaseKnowledgeService)->appTables();
+        $this->assertNotNull(Cache::get(DatabaseKnowledgeService::SCHEMA_CACHE_KEY));
+
+        // Listener MigrationsEnded (dipicu `php artisan migrate`) melupakan
+        // cache agar struktur terbaru dibaca pada permintaan berikutnya.
+        Cache::put(DatabaseKnowledgeService::SCHEMA_CACHE_KEY, ['stale' => true]);
+
+        event(new MigrationsEnded('sqlite'));
+
+        $this->assertNull(Cache::get(DatabaseKnowledgeService::SCHEMA_CACHE_KEY));
     }
 }
