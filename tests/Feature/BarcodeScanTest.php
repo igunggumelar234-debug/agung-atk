@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
-use App\Support\AIService;
+use App\Support\ChatGuard;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -126,13 +126,14 @@ class BarcodeScanTest extends TestCase
      | CHATBOT: KODE & BARCODE PRODUK IKUT KE MODEL
      * ===================================================================*/
 
-    public function test_scan_message_template_is_not_mistaken_for_coding_request(): void
+    public function test_scan_message_template_is_not_mistaken_for_privacy_request(): void
     {
         // Template pesan otomatis hasil scan kamera (partials/home-chatbot.blade.php
-        // & ai/chat.blade.php) tidak boleh tertangkap guard larangan coding.
+        // & ai/chat.blade.php) tidak boleh tertangkap pagaran privasi ChatGuard
+        // sehingga info produk barcode tetap terjawab normal.
         $template = 'Tolong info produk barcode ATK-PLP-001';
 
-        $this->assertFalse((new AIService)->isCodingRequest($template));
+        $this->assertFalse((new ChatGuard)->isPrivacyRequest($template));
     }
 
     public function test_chatbot_prompt_includes_product_codes_for_scanning(): void

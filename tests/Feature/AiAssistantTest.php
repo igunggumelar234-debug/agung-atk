@@ -284,11 +284,14 @@ class AiAssistantTest extends TestCase
     }
 
     /* =====================================================================
-     | LARANGAN CODING / PEMROGRAMAN
+     | EDUKASI PEMROGRAMAN / SQL (PROMPT 3): DIBANTU, BUKAN DITOLAK
      * ===================================================================*/
 
-    public function test_chatbot_refuses_coding_requests(): void
+    public function test_chatbot_helps_programming_education_requests(): void
     {
+        // PROMPT 3 bagian B & D: chatbot DIHARAPKAN menjawab pertanyaan
+        // pemrograman/database. Tanpa API, jawaban lokal harus jujur soal
+        // keterbatasannya — BUKAN respons penolakan larangan coding lama.
         $queries = [
             'Tolong buatkan coding kalkulator python',
             'Tuliskan script php untuk login user',
@@ -301,16 +304,19 @@ class AiAssistantTest extends TestCase
             $response->assertStatus(200);
 
             $reply = $response->json('reply');
-            $this->assertStringContainsString('tidak diizinkan', $reply);
-            $this->assertStringContainsString('kode pemrograman', $reply);
-            $this->assertStringNotContainsString('def ', $reply);
-            $this->assertStringNotContainsString('<?php', $reply);
-            $this->assertStringNotContainsString('```', $reply);
+            $this->assertNotSame('', $reply);
+            $this->assertStringNotContainsString('tidak diizinkan untuk membuat', $reply);
+            $this->assertStringNotContainsString('larangan coding', $reply);
+            // Jujur soal keterbatasan mode lokal (tanpa mengarang jawaban)
+            $this->assertStringContainsString('mengarang', $reply);
         }
     }
 
-    public function test_chatbot_filters_code_blocks_from_api_response(): void
+    public function test_chatbot_returns_api_code_when_requested(): void
     {
+        // Kode/query kini DIIZINKAN sebagai bagian edukasi (blok kode tidak
+        // lagi difilter) — tetapi pagaran output tetap menyaring kebocoran
+        // system prompt / rahasia teknis.
         config([
             'ai.key' => 'test-key-123',
             'ai.url' => 'https://ai.test/v1/chat/completions',
@@ -321,17 +327,18 @@ class AiAssistantTest extends TestCase
                 'choices' => [[
                     'message' => [
                         'role' => 'assistant',
-                        'content' => "Tentu, ini kodenya:\n```python\ndef hitung():\n    return 42\n```\nSemoga membantu!",
+                        'content' => "Tentu, ini contohnya:\n```python\ndef hitung():\n    return 42\n```\nSemoga membantu!",
                     ],
                 ]],
             ], 200),
         ]);
 
-        $reply = $this->postMessage('Minta coding python')->json('reply');
+        $reply = $this->postMessage('Beri contoh fungsi sederhana python')->json('reply');
 
-        // Menolak dan tidak ada blok kode python
-        $this->assertStringNotContainsString('def hitung()', $reply);
-        $this->assertStringNotContainsString('```', $reply);
-        $this->assertStringContainsString('tidak diizinkan', $reply);
+        // Blok kode edukatif diteruskan apa adanya oleh model
+        $this->assertStringContainsString('def hitung()', $reply);
+        $this->assertStringContainsString('```', $reply);
+        // Namun identitas internal tidak boleh bocor
+        $this->assertStringNotContainsString('Kamu adalah Asisten AI cerdas untuk toko ATK', $reply);
     }
 }

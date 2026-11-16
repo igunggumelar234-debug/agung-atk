@@ -284,16 +284,39 @@ class HomeChatTest extends TestCase
         $this->assertSame('user', $payload[array_key_last($payload)]['role']);
     }
 
-    public function test_home_chat_refuses_coding_requests(): void
+    public function test_home_chat_supports_programming_and_sql_education(): void
     {
-        $response = $this->postJson(route('home.chat'), [
-            'message' => 'Tolong buatkan coding html untuk formulir',
+        // PROMPT 3: larangan coding lama DIHAPUS — chatbot kini diharapkan
+        // membantu edukasi pemrograman/database/SQL. Pastikan respons penolakan
+        // larangan coding tidak ada lagi dan prompt sistem mengarahkan bantuan edukasi.
+        config([
+            'ai.key' => 'test-key-edu',
+            'ai.url' => 'https://ai.test/v1/chat/completions',
+            'ai.model' => 'test-model',
         ]);
 
-        $response->assertOk();
-        $reply = $response->json('reply');
-        $this->assertStringContainsString('tidak diizinkan', $reply);
-        $this->assertStringContainsString('kode pemrograman', $reply);
-        $this->assertStringNotContainsString('<form>', $reply);
+        Http::fake([
+            'ai.test/*' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Tentu. Berikut penjelasan singkat elemen <form> HTML untuk input nama lalu submit.']]],
+            ], 200),
+        ]);
+
+        $reply = $this->postJson(route('home.chat'), [
+            'message' => 'Bantu saya memahami cara membuat form HTML sederhana',
+        ])->assertOk()->json('reply');
+
+        $this->assertStringNotContainsString('tidak diizinkan untuk membuat', $reply);
+        $this->assertStringNotContainsString('larangan coding', $reply);
+        $this->assertStringContainsString('form', $reply);
+
+        // Prompt sistem wajib mengarahkan bantuan edukasi pemrograman & struktur database.
+        Http::assertSent(function ($request) {
+            $system = $request['messages'][0] ?? [];
+
+            return ($system['role'] ?? null) === 'system'
+                && str_contains($system['content'] ?? '', 'pemrograman')
+                && str_contains($system['content'] ?? '', 'SQL')
+                && str_contains($system['content'] ?? '', 'STRUKTUR DATABASE');
+        });
     }
 }
