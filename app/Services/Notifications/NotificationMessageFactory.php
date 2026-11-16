@@ -49,6 +49,7 @@ class NotificationMessageFactory
             'shipment.delivered' => $this->shipmentDelivered($data, $audience),
             'account.registered' => $this->accountRegistered($data, $audience),
             'report.daily' => $this->reportDaily($data),
+            'system.issue' => $this->systemIssue($data),
             default => $this->fallback($eventKey, $data),
         };
     }
@@ -570,6 +571,50 @@ class NotificationMessageFactory
                 '- Pengiriman berjalan: '.($summary['active_shipments'] ?? 0),
             ]),
         ];
+    }
+
+    /**
+     * Masalah sistem: pekerjaan antrean gagal (dipicu event JobFailed).
+     *
+     * Teks kesalahan disanitasi lebih dulu (sanitizeError) agar kredensial
+     * yang mungkin ikut tercetak di pesan exception tidak bocor ke notifikasi.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{subject: string, body: string}
+     */
+    private function systemIssue(array $data): array
+    {
+        $job = mb_substr((string) ($data['job'] ?? 'pekerjaan'), 0, 120);
+        $error = $this->sanitizeError((string) ($data['error'] ?? 'tidak diketahui'));
+        $attempts = (string) ($data['attempts'] ?? '-');
+
+        return [
+            'subject' => 'Masalah Sistem: '.$job,
+            'body' => $this->lines([
+                'Halo Admin,',
+                '',
+                'Pekerjaan antrean gagal diproses:',
+                '- Pekerjaan: '.$job,
+                '- Percobaan ke-: '.$attempts,
+                '- Kesalahan: '.$error,
+                '',
+                'Periksa log aplikasi (storage/logs) dan jalankan "php artisan queue:failed" untuk detail.',
+            ]),
+        ];
+    }
+
+    /**
+     * Sederhanakan teks kesalahan: buang potensi kredensial (token bot
+     * Telegram, access token Graph, Authorization bearer) sebelum pesan
+     * masuk ke notifikasi/log.
+     */
+    private function sanitizeError(string $error): string
+    {
+        $error = preg_replace('/bot\d+:[A-Za-z0-9_-]{10,}/', 'bot<token>', $error) ?? $error;
+        $error = preg_replace('/access_token=[^&\s]+/', 'access_token=<redacted>', $error) ?? $error;
+        $error = preg_replace('/Bearer\s+[A-Za-z0-9._-]{10,}/', 'Bearer <redacted>', $error) ?? $error;
+
+        return mb_substr(trim($error), 0, 240);
     }
 
     /**

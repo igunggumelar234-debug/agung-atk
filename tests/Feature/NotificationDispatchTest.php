@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendChannelReplyJob;
 use App\Models\Address;
 use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
@@ -11,8 +12,10 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -429,6 +432,43 @@ class NotificationDispatchTest extends TestCase
     }
 
     /* =====================================================================
+     | MASALAH SISTEM (KEGAGALAN JOB ANTREAN)
+     * ===================================================================*/
+
+    public function test_failed_queue_job_triggers_sanitized_system_issue_alert(): void
+    {
+        $this->enableNotifications(false);
+
+        $job = \Mockery::mock(Job::class);
+        $job->shouldReceive('resolveName')->andReturn(SendChannelReplyJob::class);
+        $job->shouldReceive('attempts')->andReturn(3);
+
+        // Teks error sengaja memuat pola kredensial — wajib disanitasi
+        // sebelum menjadi isi notifikasi admin.
+        event(new JobFailed('database', $job, new \RuntimeException(
+            'Gagal kirim ke https://api.telegram.org/bot123456:SECRETSECRETVALUE/sendMessage '
+            .'access_token=EAAGXXYYZZ (HTTP 500)'
+        )));
+
+        $log = NotificationLog::query()
+            ->where('event_key', 'system.issue')
+            ->where('channel', 'email')
+            ->where('recipient', config('notifications.admin_email'))
+            ->first();
+
+        $this->assertNotNull($log, 'Kegagalan job harus memberi tahu admin via email.');
+        $this->assertSame(NotificationLog::STATUS_SENT, $log->status);
+        $this->assertStringContainsString('Masalah Sistem', (string) $log->subject);
+        $this->assertStringContainsString('SendChannelReplyJob', (string) $log->body);
+
+        // Kredensial pada teks error tidak pernah bocor ke notifikasi.
+        $this->assertStringContainsString('bot<token>', (string) $log->body);
+        $this->assertStringContainsString('access_token=<redacted>', (string) $log->body);
+        $this->assertStringNotContainsString('SECRETSECRETVALUE', (string) $log->body);
+        $this->assertStringNotContainsString('EAAGXXYYZZ', (string) $log->body);
+    }
+
+    /* =====================================================================
      | STOK
      * ===================================================================*/
 
@@ -438,7 +478,7 @@ class NotificationDispatchTest extends TestCase
 
         $product = Product::where('is_active', true)->firstOrFail();
 
-        // Stok tersentuh batas minimum -> stok.low (admin saja)
+        // Stok tersentuh batas minimum -> stok.low (admin & anggota toko)
         $product->update(['min_stock' => 5, 'stock' => 5]);
 
         $this->assertDatabaseHas('notification_logs', [
@@ -590,11 +630,14 @@ class NotificationDispatchTest extends TestCase
                 ->where('recipient', config('notifications.admin_email'))
                 ->count()
         );
+        // Penerima anggota toko (audiens seller) juga tepat satu kali —
+        // pembatasan jendela berlaku per penerima, bukan global.
         $this->assertSame(
             1,
             NotificationLog::where('event_key', 'stock.low')
                 ->where('channel', 'email')
-                ->count() // admin saja
+                ->where('recipient', 'penjual@agungatk.com')
+                ->count()
         );
     }
 

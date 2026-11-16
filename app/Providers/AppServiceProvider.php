@@ -14,9 +14,16 @@ use App\Observers\ProductObserver;
 use App\Observers\ShipmentObserver;
 use App\Observers\UserObserver;
 use App\Services\ATKImageRecognitionService;
+use App\Services\Notifications\NotificationManager;
+use App\Support\DatabaseKnowledgeService;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -63,6 +70,36 @@ class AppServiceProvider extends ServiceProvider
         Shipment::observe(ShipmentObserver::class);
         Product::observe(ProductObserver::class);
         User::observe(UserObserver::class);
+
+        // Masalah sistem: job antrean yang gagal memberi tahu admin (kejadian
+        // system.issue). Dedupe per referensi (window 60 detik) pada
+        // NotificationManager mencegah banjir bila banyak job gagal beruntun,
+        // dan teks error disanitasi pabrik pesan sebelum menjadi notifikasi.
+        Event::listen(JobFailed::class, function (JobFailed $event): void {
+            try {
+                if (! config('notifications.enabled')) {
+                    return;
+                }
+
+                app(NotificationManager::class)->dispatch('system.issue', [
+                    'reference' => 'system.issue',
+                    'job' => class_basename($event->job->resolveName()),
+                    'error' => $event->exception->getMessage(),
+                    'attempts' => $event->job->attempts(),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('notification.system_issue_dispatch_failed', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+
+        // Pengetahuan skema chatbot di-cache lintas request — segarkan
+        // otomatis setelah `php artisan migrate` selesai agar tabel/kolom
+        // baru langsung dikenali tanpa perintah manual.
+        Event::listen(MigrationsEnded::class, function (): void {
+            Cache::forget(DatabaseKnowledgeService::SCHEMA_CACHE_KEY);
+        });
 
         // Sediakan riwayat pesan untuk widget chatbot mengambang di semua menu
         View::composer('partials.home-chatbot', function ($view) {

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
 use App\Models\User;
+use App\Services\Notifications\NotificationManager;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -81,6 +82,51 @@ class NotificationSettingsTest extends TestCase
         $response->assertSee('WHATSAPP_ACCESS_TOKEN');
         $response->assertSee('WHATSAPP_PHONE_NUMBER_ID');
         $response->assertSee('Belum lengkap');
+    }
+
+    /* =====================================================================
+     | STATUS KREDENSIAL & KARTU SISTEM
+     * ===================================================================*/
+
+    public function test_email_channel_requires_smtp_password_to_report_configured(): void
+    {
+        // SMTP dengan username tetapi tanpa kata sandi (mis. Gmail App
+        // Password belum diisi) -> status jujur "belum lengkap".
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.host' => 'smtp.gmail.com',
+            'mail.mailers.smtp.port' => 587,
+            'mail.mailers.smtp.username' => 'akun@contoh.com',
+            'mail.mailers.smtp.password' => null,
+            'mail.from.address' => 'akun@contoh.com',
+        ]);
+
+        $status = app(NotificationManager::class)->channelStatus('email');
+
+        $this->assertFalse($status['configured']);
+        $this->assertContains('MAIL_PASSWORD', $status['missing']);
+    }
+
+    public function test_dashboard_shows_system_queue_and_ai_provider_status(): void
+    {
+        config([
+            'ai.key' => null,
+            'ai.url' => 'https://ai.test/v1/chat/completions',
+            'ai.model' => 'model-tes-ai',
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/notifications')
+            ->assertStatus(200);
+
+        $response->assertSee('Status Sistem');
+        $response->assertSee('Pengantrean Notifikasi');
+        $response->assertSee('Provider AI Chatbot');
+        $response->assertSee('model-tes-ai');
+
+        // Tanpa kunci AI: status jujur + penjelasan mode fallback.
+        $response->assertSee('Belum dikonfigurasi');
+        $response->assertSee('AI_API_KEY');
     }
 
     /* =====================================================================

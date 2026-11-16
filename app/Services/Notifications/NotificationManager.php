@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Jobs\SendNotificationJob;
+use App\Models\ChannelIdentity;
 use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
 use App\Models\Role;
@@ -96,6 +97,12 @@ class NotificationManager
                 continue;
             }
 
+            // Saklar integrasi per saluran (.env TELEGRAM_ENABLED / WHATSAPP_ENABLED)
+            // — false berarti saluran dimatikan pemilik tanpa mengubah switch DB.
+            if (! $this->channelEnabled($channel)) {
+                continue;
+            }
+
             // Saluran yang kredensialnya belum diisi dilewati dengan aman —
             // tidak ada log, tidak ada panggilan API.
             if (! $this->channelStatus($channel)['configured']) {
@@ -168,6 +175,14 @@ class NotificationManager
             );
         }
 
+        if (! $this->channelEnabled($channel)) {
+            return $this->recordFailure(
+                $channel,
+                '-',
+                'Saluran '.strtoupper($channel).' dinonaktifkan ('.strtoupper($channel).'_ENABLED=false pada .env).'
+            );
+        }
+
         // Status konfigurasi diperiksa lebih dahulu agar pesan error menyebut
         // nama variabel .env yang belum diisi.
         $status = $this->channelStatus($channel);
@@ -223,7 +238,7 @@ class NotificationManager
     /**
      * Status konfigurasi sebuah saluran (tanpa menampilkan nilai rahasia).
      *
-     * @return array{configured: bool, missing: list<string>, mode: ?string}
+     * @return array{configured: bool, missing: list<string>, mode: ?string, enabled: bool}
      */
     public function channelStatus(string $channel): array
     {
@@ -240,7 +255,23 @@ class NotificationManager
             'configured' => $missing === [],
             'missing' => $missing,
             'mode' => $mode,
+            'enabled' => $this->channelEnabled($channel),
         ];
+    }
+
+    /**
+     * Saklar integrasi per saluran dari .env (TELEGRAM_ENABLED / WHATSAPP_ENABLED).
+     *
+     * Saluran email tidak memiliki saklar integrasi terpisah — hanya
+     * NOTIFICATIONS_ENABLED yang mengaturnya.
+     */
+    private function channelEnabled(string $channel): bool
+    {
+        if ($channel === 'email') {
+            return true;
+        }
+
+        return (bool) config("services.{$channel}.enabled", true);
     }
 
     /**
@@ -339,11 +370,20 @@ class NotificationManager
         if (in_array('customer', $audiences, true) && $customer instanceof User) {
             $targets['email'][] = ['to' => $customer->email, 'audience' => 'customer'];
 
+            // Nomor WhatsApp: identitas kanal terverifikasi diprioritaskan;
+            // fallback ke kolom phone / alamat (konvensi lama tetap berlaku).
             $targets['whatsapp'][] = [
-                'to' => $customer->phone
+                'to' => $this->linkedIdentifier('whatsapp', $customer->id)
+                    ?: $customer->phone
                     ?: $customer->addresses()->orderByDesc('is_primary')->value('phone'),
                 'audience' => 'customer',
             ];
+
+            $customerTelegram = $this->linkedIdentifier('telegram', $customer->id);
+
+            if ($customerTelegram !== null) {
+                $targets['telegram'][] = ['to' => $customerTelegram, 'audience' => 'customer'];
+            }
         }
 
         if (in_array('seller', $audiences, true)) {
@@ -356,11 +396,22 @@ class NotificationManager
                 ->where('is_active', true)
                 ->get(['id', 'email', 'phone']);
 
+            // Satu query untuk seluruh staf: identitas terverifikasi per pengguna
+            // (WA diprioritaskan daripada kolom phone, Telegram hanya dari identitas).
+            $sellerWhatsapp = $this->linkedMap('whatsapp', $sellers->pluck('id'));
+            $sellerTelegram = $this->linkedMap('telegram', $sellers->pluck('id'));
+
             foreach ($sellers as $seller) {
                 $targets['email'][] = ['to' => $seller->email, 'audience' => 'seller'];
 
-                if ($seller->phone) {
-                    $targets['whatsapp'][] = ['to' => $seller->phone, 'audience' => 'seller'];
+                $whatsapp = $sellerWhatsapp[$seller->id] ?? $seller->phone;
+
+                if ($whatsapp) {
+                    $targets['whatsapp'][] = ['to' => $whatsapp, 'audience' => 'seller'];
+                }
+
+                if (isset($sellerTelegram[$seller->id])) {
+                    $targets['telegram'][] = ['to' => $sellerTelegram[$seller->id], 'audience' => 'seller'];
                 }
             }
         }
@@ -371,13 +422,56 @@ class NotificationManager
             if ($courier instanceof User) {
                 $targets['email'][] = ['to' => $courier->email, 'audience' => 'courier'];
 
-                if ($courier->phone) {
-                    $targets['whatsapp'][] = ['to' => $courier->phone, 'audience' => 'courier'];
+                $courierWhatsapp = $this->linkedIdentifier('whatsapp', $courier->id) ?: $courier->phone;
+
+                if ($courierWhatsapp) {
+                    $targets['whatsapp'][] = ['to' => $courierWhatsapp, 'audience' => 'courier'];
+                }
+
+                $courierTelegram = $this->linkedIdentifier('telegram', $courier->id);
+
+                if ($courierTelegram !== null) {
+                    $targets['telegram'][] = ['to' => $courierTelegram, 'audience' => 'courier'];
                 }
             }
         }
 
         return $targets;
+    }
+
+    /**
+     * Identitas kanal terverifikasi milik satu pengguna (null bila belum terhubung).
+     */
+    private function linkedIdentifier(string $channel, int $userId): ?string
+    {
+        $identifier = ChannelIdentity::query()
+            ->where('channel', $channel)
+            ->where('user_id', $userId)
+            ->where('status', ChannelIdentity::STATUS_VERIFIED)
+            ->value('identifier');
+
+        return $identifier !== null ? (string) $identifier : null;
+    }
+
+    /**
+     * Peta user_id => identifier terverifikasi untuk banyak pengguna sekaligus.
+     *
+     * @param  Collection<int, int>  $userIds
+     * @return array<int, string>
+     */
+    private function linkedMap(string $channel, Collection $userIds): array
+    {
+        if ($userIds->isEmpty()) {
+            return [];
+        }
+
+        return ChannelIdentity::query()
+            ->where('channel', $channel)
+            ->whereIn('user_id', $userIds)
+            ->where('status', ChannelIdentity::STATUS_VERIFIED)
+            ->pluck('identifier', 'user_id')
+            ->map(fn ($identifier) => (string) $identifier)
+            ->all();
     }
 
     /**
@@ -532,6 +626,13 @@ class NotificationManager
 
             if (blank(config('mail.mailers.smtp.username'))) {
                 $missing[] = 'MAIL_USERNAME';
+            }
+
+            // SMTP tanpa kata sandi tidak akan pernah berhasil mengirim —
+            // status "terkonfigurasi" harus menuntut kredensial lengkap
+            // (mis. Gmail App Password yang diisi pemilik).
+            if (blank(config('mail.mailers.smtp.password'))) {
+                $missing[] = 'MAIL_PASSWORD';
             }
         }
 

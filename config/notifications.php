@@ -30,8 +30,10 @@ return [
     // Penerima notifikasi untuk audiens admin.
     // Default KOSONG — bila env tidak diisi, saluran email/WA dilewati dengan aman,
     // bukan mengirim ke kontak bawaan yang tertinggal di repository.
+    // WHATSAPP_ADMIN_NUMBER (konvensi PROMPT 9) menjadi preferensi; WHATSAPP_ADMIN_PHONE
+    // tetap didukung agar konfigurasi lama tidak berubah arti.
     'admin_email' => env('NOTIFICATION_ADMIN_EMAIL', ''),
-    'admin_phone' => env('WHATSAPP_ADMIN_PHONE', ''),
+    'admin_phone' => env('WHATSAPP_ADMIN_NUMBER') ?: env('WHATSAPP_ADMIN_PHONE', ''),
 
     // Jendela anti-duplikat global (menit): kejadian + saluran + penerima +
     // referensi yang sama tidak akan dikirim dua kali dalam jendela ini.
@@ -128,7 +130,7 @@ return [
         ],
         'stock.low' => [
             'label' => 'Stok produk hampir habis',
-            'audiences' => ['admin'],
+            'audiences' => ['admin', 'seller'],
         ],
         'stock.out' => [
             'label' => 'Stok produk habis',
@@ -140,7 +142,9 @@ return [
         ],
         'shipment.status' => [
             'label' => 'Status pengiriman diperbarui',
-            'audiences' => ['customer', 'admin'],
+            // 'courier' resolve ke kurir yang ditugaskan pada shipment ini saja
+            // (lihat NotificationManager::recipients) — bukan seluruh kurir.
+            'audiences' => ['customer', 'admin', 'courier'],
         ],
         'shipment.shipping' => [
             'label' => 'Pesanan sedang dikirim ke pelanggan',
@@ -158,6 +162,12 @@ return [
             'label' => 'Ringkasan penjualan harian',
             'audiences' => ['admin'],
             'window' => 1440,
+        ],
+        'system.issue' => [
+            'label' => 'Masalah sistem (pekerjaan antrean gagal)',
+            'audiences' => ['admin'],
+            // Jendela dedupe pendek: kegagalan beruntun tidak membanjiri admin.
+            'window' => 60,
         ],
     ],
 ];
