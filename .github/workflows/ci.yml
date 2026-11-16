@@ -1,0 +1,67 @@
+name: CI
+
+# Pipeline integrasi berkelanjutan Agung ATK.
+# - Tests  : PHPUnit (SQLite in-memory, tanpa layanan eksternal, TANPA email/pesan nyata)
+# - Style  : Laravel Pint (gaya kode)
+# - Build  : aset frontend Vite (scaffold proyek)
+# Menjalankan di GitHub Actions; pipeline GAGAL bila salah satu langkah gagal.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  tests:
+    name: Unit & Feature Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, mbstring, dom, curl, zip, fileinfo, openssl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Siapkan environment testing
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: Pemeriksaan gaya kode (Laravel Pint)
+        run: vendor/bin/pint --test
+
+      - name: Jalankan migrasi pada database testing (SQLite in-memory)
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan migrate --force
+
+      - name: Jalankan unit & feature test
+        run: php artisan test --compact
+
+  frontend:
+    name: Frontend Build (Vite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build aset frontend
+        run: npm run build
