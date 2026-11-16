@@ -37,35 +37,59 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Telegram Bot API (Notifikasi)
+    | Telegram Bot API (Notifikasi & Chatbot)
     |--------------------------------------------------------------------------
     | Token bot & Chat ID WAJIB diisi melalui .env — jangan hard-code di sini.
     | Nomor telepon BUKAN Chat ID. Dapatkan Chat ID dengan mengirim pesan /start
     | ke bot lalu membuka https://api.telegram.org/bot<TOKEN>/getUpdates
     | (atau gunakan tombol bantuan pada halaman pengaturan notifikasi).
+    |
+    | enabled        : saklar integrasi Telegram (TELEGRAM_ENABLED).
+    | bot_username   : username bot tanpa '@' (dari BotFather) — BUKAN token.
+    | webhook_secret : secret_token untuk validasi header
+    |                  X-Telegram-Bot-Api-Secret-Token pada webhook masuk.
     */
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
-        'chat_id' => env('TELEGRAM_CHAT_ID'),
+        'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+        'chat_id' => env('TELEGRAM_BOT_CHAT_ID') ?: env('TELEGRAM_CHAT_ID'),
         'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID'),
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+        'enabled' => (bool) env('TELEGRAM_ENABLED', true),
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | WhatsApp Business Cloud API (Notifikasi)
+    | WhatsApp Business Cloud API (Notifikasi & Chatbot)
     |--------------------------------------------------------------------------
     | Semua kredensial diisi melalui .env. Pesan yang memerlukan template
     | harus memakai template yang sudah disetujui di Meta Business Suite.
     | message_mode: 'text' (percakapan bebas) atau 'template'.
+    |
+    | enabled     : saklar integrasi WhatsApp (WHATSAPP_ENABLED).
+    | verify_token: token verifikasi webhook GET dari Meta (WHATSAPP_VERIFY_TOKEN).
+    | app_secret  : app secret Meta untuk validasi header
+    |               X-Hub-Signature-256 pada webhook masuk (disarankan).
+    | admin_number: nomor tujuan admin — bisa juga lewat WHATSAPP_ADMIN_PHONE.
+    | CATATAN: nomor pengirim Cloud API berasal dari Meta (Phone Number ID),
+    | bukan nomor admin di bawah ini.
     */
     'whatsapp' => [
         'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
         'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
-        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
+        // WHATSAPP_CLOUD_API_VERSION (nama resmi Meta) didahulukan; WHATSAPP_API_VERSION
+        // tetap didukung untuk kompatibilitas konfigurasi lama.
+        'api_version' => env('WHATSAPP_CLOUD_API_VERSION')
+            ?: env('WHATSAPP_API_VERSION', 'v21.0'),
+        'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', '62'),
         'message_mode' => env('WHATSAPP_MESSAGE_MODE', 'text'),
         'template_name' => env('WHATSAPP_TEMPLATE_NAME'),
         'template_language' => env('WHATSAPP_TEMPLATE_LANGUAGE', 'id'),
+        'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+        'admin_number' => env('WHATSAPP_ADMIN_NUMBER') ?: env('WHATSAPP_ADMIN_PHONE'),
+        'enabled' => (bool) env('WHATSAPP_ENABLED', true),
     ],
 
     /*

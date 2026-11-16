@@ -86,7 +86,7 @@
         </div>
 
         {{-- Ganti password --}}
-        <div class="card card-custom">
+        <div class="card card-custom mb-4">
             <div class="card-header"><i class="bi bi-shield-lock text-primary me-1"></i> Ganti Password</div>
             <div class="card-body">
                 <form action="{{ route('profile.password') }}" method="POST">
@@ -124,6 +124,95 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        {{-- Integrasi chatbot WhatsApp & Telegram (tautan via kode verifikasi) --}}
+        <div class="card card-custom">
+            <div class="card-header"><i class="bi bi-chat-dots text-primary me-1"></i> Integrasi Chatbot (WhatsApp & Telegram)</div>
+            <div class="card-body">
+                @if (session('channel_status'))
+                    <div class="alert alert-success py-2 small mb-3">{{ session('channel_status') }}</div>
+                @endif
+
+                <div class="row g-3">
+                    @foreach ([
+                        'whatsapp' => [
+                            'label' => 'WhatsApp',
+                            'icon' => 'bi-whatsapp',
+                            'hint' => 'lewat pesan WhatsApp ke nomor bisnis resmi toko (nomor pengirim Cloud API)',
+                        ],
+                        'telegram' => [
+                            'label' => 'Telegram',
+                            'icon' => 'bi-telegram',
+                            'hint' => 'ke bot Telegram toko',
+                        ],
+                    ] as $channelKey => $channelInfo)
+                        @php($linked = $linkedChannels[$channelKey] ?? null)
+                        @php($pending = $pendingChannels[$channelKey] ?? null)
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-semibold">
+                                        <i class="bi {{ $channelInfo['icon'] }} me-1"></i> {{ $channelInfo['label'] }}
+                                    </span>
+                                    @if ($linked)
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Terhubung</span>
+                                    @elseif ($pending)
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Menunggu Verifikasi</span>
+                                    @else
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum Terhubung</span>
+                                    @endif
+                                </div>
+
+                                @if ($linked)
+                                    <div class="small text-muted mb-2">
+                                        Terhubung ke <span class="fw-semibold text-dark">{{ $linked->identifier }}</span>
+                                        @if ($linked->verified_at)
+                                            <br>sejak {{ $linked->verified_at->translatedFormat('d M Y H:i') }}
+                                        @endif
+                                        @if ($linked->last_message_at)
+                                            <br>pesan terakhir {{ $linked->last_message_at->translatedFormat('d M Y H:i') }}
+                                        @endif
+                                    </div>
+                                    <form action="{{ route('profile.channel.unlink', ['channel' => $channelKey]) }}"
+                                          method="POST" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"
+                                                onclick="return confirm('Cabut tautan {{ $channelInfo['label'] }}? Chatbot tidak akan lagi mengakses data akun Anda lewat kanal ini.');">
+                                            <i class="bi bi-unlink me-1"></i> Cabut Tautan
+                                        </button>
+                                    </form>
+                                @else
+                                    <div class="small text-muted mb-2">
+                                        @if ($pending)
+                                            Kode verifikasi: <span class="fw-bold text-dark">{{ $pending->verification_code }}</span>
+                                            <br>Berlaku sampai {{ $pending->code_expires_at->translatedFormat('d M Y H:i') }}.
+                                            <br>Kirim kode ini {{ $channelInfo['hint'] }}.
+                                        @else
+                                            Hubungkan akun agar chatbot dapat menjawab pertanyaan tentang data Anda
+                                            (pesanan, stok, pembayaran) sesuai hak akses.
+                                            <br>Kirim kode {{ $channelInfo['hint'] }} setelah kode dibuat.
+                                        @endif
+                                    </div>
+                                    <form action="{{ route('profile.channel.code', ['channel' => $channelKey]) }}"
+                                          method="POST" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-primary-atk btn-sm">
+                                            <i class="bi bi-key me-1"></i>
+                                            {{ $pending ? 'Buat Kode Baru' : 'Buat Kode Verifikasi' }}
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="form-text mt-3">
+                    Tautan memerlukan kode verifikasi dari halaman ini — bukan sekadar username atau nomor.
+                    Data akun hanya ditampilkan ke identitas kanal yang sudah terverifikasi.
+                </div>
             </div>
         </div>
     </div>

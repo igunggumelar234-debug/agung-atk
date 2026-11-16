@@ -38,6 +38,18 @@
         <env name="WHATSAPP_ACCESS_TOKEN" value=""/>
         <env name="WHATSAPP_PHONE_NUMBER_ID" value=""/>
         <env name="WHATSAPP_ADMIN_PHONE" value=""/>
+        <!-- Integrasi chatbot (PROMPT 9): isolasi dari .env live. Saklar kanal
+             = true agar perilaku tidak berubah dari sebelum gerbang
+             WHATSAPP_ENABLED / TELEGRAM_ENABLED ada; kredensial webhook,
+             username, dan alias chat id dikosongkan. -->
+        <env name="TELEGRAM_ENABLED" value="true"/>
+        <env name="TELEGRAM_BOT_USERNAME" value=""/>
+        <env name="TELEGRAM_BOT_CHAT_ID" value=""/>
+        <env name="TELEGRAM_WEBHOOK_SECRET" value=""/>
+        <env name="WHATSAPP_ENABLED" value="true"/>
+        <env name="WHATSAPP_VERIFY_TOKEN" value=""/>
+        <env name="WHATSAPP_APP_SECRET" value=""/>
+        <env name="WHATSAPP_ADMIN_NUMBER" value=""/>
         <env name="NOTIFICATION_ADMIN_EMAIL" value="admin-test@agungatk.test"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>

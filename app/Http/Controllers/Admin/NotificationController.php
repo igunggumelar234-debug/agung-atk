@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChannelIdentity;
 use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Notifications\TelegramNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -84,6 +87,10 @@ class NotificationController extends Controller
         return view('admin.notifications.index', [
             'channels' => $channels,
             'events' => $events,
+            'eventLabels' => array_merge(
+                ['chatbot.reply' => 'Balasan Chatbot'],
+                array_map(fn (array $event) => $event['label'] ?? null, $events),
+            ),
             'audiences' => config('notifications.audiences', []),
             'channelStates' => $channelStates,
             'eventStates' => $eventStates,
@@ -94,6 +101,8 @@ class NotificationController extends Controller
             'queueEnabled' => config('notifications.queue'),
             'telegramChatId' => config('services.telegram.admin_chat_id')
                 ?: config('services.telegram.chat_id'),
+            'integration' => $this->integrationData(),
+            'system' => $this->systemStatus(),
             'filters' => array_map(fn ($value) => (string) $value, $filters),
             'hasActiveFilter' => $hasActiveFilter,
             'logs' => $logs,
@@ -223,5 +232,182 @@ class NotificationController extends Controller
             .($identity !== '' ? ' — '.$identity : '')
             .'. Tambahkan TELEGRAM_ADMIN_CHAT_ID='.$result['chat_id'].' ke file .env, lalu jalankan php artisan config:clear.'
         );
+    }
+
+    /**
+     * Uji koneksi WhatsApp (Graph API) & Telegram (getMe + info webhook).
+     *
+     * Hanya membaca status — tidak pernah mengirim pesan. Hasil disimpan
+     * satu jam agar halaman tidak memanggil API berulang.
+     */
+    public function testConnections(): RedirectResponse
+    {
+        $telegram = $this->telegram->getMe();
+
+        if ($telegram['ok'] ?? false) {
+            $telegram['webhook'] = $this->telegram->webhookInfo();
+
+            $expected = (string) config('services.telegram.bot_username', '');
+
+            $telegram['username_matches'] = $expected === ''
+                ? null
+                : strcasecmp((string) ($telegram['username'] ?? ''), $expected) === 0;
+        }
+
+        $whatsapp = $this->whatsappConnectionTest();
+
+        Cache::put('chatbot.connections.test', [
+            'at' => now()->toIso8601String(),
+            'telegram' => $telegram,
+            'whatsapp' => $whatsapp,
+        ], now()->addHour());
+
+        $parts = [];
+
+        if ($telegram['ok'] ?? false) {
+            $parts[] = 'Telegram OK (@'.($telegram['username'] ?? '?').')';
+        } else {
+            $parts[] = 'Telegram gagal: '.($telegram['error'] ?? 'tidak diketahui');
+        }
+
+        if ($whatsapp['ok'] ?? false) {
+            $parts[] = 'WhatsApp OK (nomor '.$whatsapp['display_phone'].')';
+        } else {
+            $parts[] = 'WhatsApp gagal: '.($whatsapp['error'] ?? 'tidak diketahui');
+        }
+
+        $allOk = ($telegram['ok'] ?? false) && ($whatsapp['ok'] ?? false);
+        $anyOk = ($telegram['ok'] ?? false) || ($whatsapp['ok'] ?? false);
+
+        $message = 'Uji koneksi: '.implode(' | ', $parts).'.';
+
+        if ($allOk) {
+            return back()->with('success', $message);
+        }
+
+        if ($anyOk) {
+            return back()->with('error', $message);
+        }
+
+        return back()->with('error', $message);
+    }
+
+    /**
+     * Uji koneksi WhatsApp Cloud API lewat baca data nomor (bukan pengiriman).
+     *
+     * @return array{ok: bool, display_phone?: string, error?: string}
+     */
+    private function whatsappConnectionTest(): array
+    {
+        $status = $this->notifications->channelStatus('whatsapp');
+
+        if (! $status['configured']) {
+            return [
+                'ok' => false,
+                'error' => 'konfigurasi belum lengkap ('.implode(', ', $status['missing']).')',
+            ];
+        }
+
+        try {
+            $version = (string) config('services.whatsapp.api_version', 'v21.0');
+            $phoneNumberId = (string) config('services.whatsapp.phone_number_id');
+
+            $response = Http::withToken((string) config('services.whatsapp.access_token'))
+                ->timeout((int) config('notifications.http_timeout', 15))
+                ->get('https://graph.facebook.com/'.$version.'/'.$phoneNumberId);
+
+            $response->throw();
+
+            return [
+                'ok' => true,
+                'display_phone' => (string) ($response->json('display_phone_number') ?? $phoneNumberId),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'error' => mb_substr($e->getMessage(), 0, 200),
+            ];
+        }
+    }
+
+    /**
+     * Status sistem untuk dashboard: pengantrean notifikasi, provider AI,
+     * dan jumlah job yang gagal — tanpa menampilkan rahasia apa pun.
+     *
+     * @return array<string, mixed>
+     */
+    private function systemStatus(): array
+    {
+        $aiLast = Cache::get('ai.last_status');
+
+        return [
+            'queue_enabled' => (bool) config('notifications.queue'),
+            'queue_connection' => (string) config('queue.default'),
+            'failed_jobs' => $this->failedJobCount(),
+            'ai_url' => (string) config('ai.url'),
+            'ai_model' => (string) config('ai.model'),
+            'ai_key_set' => filled(config('ai.key')),
+            'ai_last' => is_array($aiLast) ? $aiLast : null,
+        ];
+    }
+
+    /**
+     * Jumlah job gagal pada antrean (tabel failed_jobs) — aman bila tabel
+     * belum ada (database baru).
+     */
+    private function failedJobCount(): int
+    {
+        try {
+            return (int) DB::table('failed_jobs')->count();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * Data integrasi kanal chatbot untuk dashboard (tanpa rahasia).
+     *
+     * @return array<string, mixed>
+     */
+    private function integrationData(): array
+    {
+        $test = Cache::get('chatbot.connections.test');
+        $telegramStatus = $this->notifications->channelStatus('telegram');
+        $whatsappStatus = $this->notifications->channelStatus('whatsapp');
+
+        return [
+            'whatsapp' => [
+                'enabled' => (bool) config('services.whatsapp.enabled'),
+                'configured' => $whatsappStatus['configured'],
+                'missing' => $whatsappStatus['missing'],
+                'admin_number' => self::maskRecipient((string) config('notifications.admin_phone')),
+                'message_mode' => (string) config('services.whatsapp.message_mode'),
+                'webhook_url' => route('webhooks.whatsapp.receive'),
+                'verify_url' => route('webhooks.whatsapp.verify'),
+                'last_webhook_at' => Cache::get('chatbot.webhook.last_whatsapp'),
+                'test' => is_array($test) ? ($test['whatsapp'] ?? null) : null,
+            ],
+            'telegram' => [
+                'enabled' => (bool) config('services.telegram.enabled'),
+                'configured' => $telegramStatus['configured'],
+                'missing' => $telegramStatus['missing'],
+                'bot_username' => filled(config('services.telegram.bot_username'))
+                    ? '@'.config('services.telegram.bot_username')
+                    : null,
+                'chat_id' => config('services.telegram.admin_chat_id')
+                    ?: config('services.telegram.chat_id'),
+                'webhook_secret_set' => filled(config('services.telegram.webhook_secret')),
+                'webhook_url' => route('webhooks.telegram.receive'),
+                'last_webhook_at' => Cache::get('chatbot.webhook.last_telegram'),
+                'test' => is_array($test) ? ($test['telegram'] ?? null) : null,
+            ],
+            'test_at' => is_array($test) ? ($test['at'] ?? null) : null,
+            'last_sent_at' => NotificationLog::query()
+                ->where('status', NotificationLog::STATUS_SENT)
+                ->max('sent_at'),
+            'linked_accounts' => ChannelIdentity::query()
+                ->where('status', ChannelIdentity::STATUS_VERIFIED)
+                ->count(),
+        ];
     }
 }

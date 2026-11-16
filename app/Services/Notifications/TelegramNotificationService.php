@@ -103,6 +103,185 @@ class TelegramNotificationService
     }
 
     /**
+     * Identitas bot melalui getMe (verifikasi username & uji koneksi).
+     *
+     * @return array{ok: bool, username?: ?string, name?: ?string, error?: string}
+     */
+    public function getMe(): array
+    {
+        $token = config('services.telegram.bot_token');
+
+        if (blank($token)) {
+            return [
+                'ok' => false,
+                'error' => 'Isi TELEGRAM_BOT_TOKEN pada .env terlebih dahulu (dapatkan dari @BotFather).',
+            ];
+        }
+
+        try {
+            $response = $this->client($token)
+                ->get('https://api.telegram.org/bot'.$token.'/getMe');
+
+            $response->throw();
+
+            if (! $response->json('ok', false)) {
+                return [
+                    'ok' => false,
+                    'error' => 'Telegram menolak getMe: '.($response->json('description') ?? 'tidak diketahui'),
+                ];
+            }
+
+            $result = $response->json('result', []);
+
+            return [
+                'ok' => true,
+                'username' => $result['username'] ?? null,
+                'name' => trim(($result['first_name'] ?? '').' '.($result['last_name'] ?? '')),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'error' => 'Gagal menghubungi Telegram: '.mb_substr($e->getMessage(), 0, 300),
+            ];
+        }
+    }
+
+    /**
+     * Daftarkan webhook resmi Telegram (setWebhook) dengan secret token.
+     *
+     * @return array{ok: bool, error?: string}
+     */
+    public function setWebhook(string $url, string $secret): array
+    {
+        $token = config('services.telegram.bot_token');
+
+        if (blank($token)) {
+            return [
+                'ok' => false,
+                'error' => 'Isi TELEGRAM_BOT_TOKEN pada .env terlebih dahulu (dapatkan dari @BotFather).',
+            ];
+        }
+
+        if (blank($secret)) {
+            return [
+                'ok' => false,
+                'error' => 'Isi TELEGRAM_WEBHOOK_SECRET pada .env terlebih dahulu.',
+            ];
+        }
+
+        try {
+            $response = $this->client($token)
+                ->post('https://api.telegram.org/bot'.$token.'/setWebhook', [
+                    'url' => $url,
+                    'secret_token' => $secret,
+                    'allowed_updates' => ['message'],
+                ]);
+
+            $response->throw();
+
+            if (! $response->json('ok', false)) {
+                return [
+                    'ok' => false,
+                    'error' => 'Telegram menolak setWebhook: '.($response->json('description') ?? 'tidak diketahui'),
+                ];
+            }
+
+            return ['ok' => true];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'error' => 'Gagal mengatur webhook: '.mb_substr($e->getMessage(), 0, 300),
+            ];
+        }
+    }
+
+    /**
+     * Cabut webhook Telegram (deleteWebhook).
+     *
+     * @return array{ok: bool, error?: string}
+     */
+    public function deleteWebhook(): array
+    {
+        $token = config('services.telegram.bot_token');
+
+        if (blank($token)) {
+            return [
+                'ok' => false,
+                'error' => 'Isi TELEGRAM_BOT_TOKEN pada .env terlebih dahulu (dapatkan dari @BotFather).',
+            ];
+        }
+
+        try {
+            $response = $this->client($token)
+                ->post('https://api.telegram.org/bot'.$token.'/deleteWebhook');
+
+            $response->throw();
+
+            if (! $response->json('ok', false)) {
+                return [
+                    'ok' => false,
+                    'error' => 'Telegram menolak deleteWebhook: '.($response->json('description') ?? 'tidak diketahui'),
+                ];
+            }
+
+            return ['ok' => true];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'error' => 'Gagal mencabut webhook: '.mb_substr($e->getMessage(), 0, 300),
+            ];
+        }
+    }
+
+    /**
+     * Info webhook terpasang (tanpa menampilkan token/secret).
+     *
+     * @return array{ok: bool, url?: ?string, has_custom_secret?: bool, pending?: int, last_error?: ?string, error?: string}
+     */
+    public function webhookInfo(): array
+    {
+        $token = config('services.telegram.bot_token');
+
+        if (blank($token)) {
+            return [
+                'ok' => false,
+                'error' => 'Isi TELEGRAM_BOT_TOKEN pada .env terlebih dahulu (dapatkan dari @BotFather).',
+            ];
+        }
+
+        try {
+            $response = $this->client($token)
+                ->get('https://api.telegram.org/bot'.$token.'/getWebhookInfo');
+
+            $response->throw();
+
+            if (! $response->json('ok', false)) {
+                return [
+                    'ok' => false,
+                    'error' => 'Telegram menolak getWebhookInfo: '.($response->json('description') ?? 'tidak diketahui'),
+                ];
+            }
+
+            $result = $response->json('result', []);
+
+            return [
+                'ok' => true,
+                'url' => $result['url'] ?? null,
+                'has_custom_secret' => (bool) ($result['has_custom_certificate'] ?? false),
+                'pending' => (int) ($result['pending_update_count'] ?? 0),
+                'last_error' => filled($result['last_error_message'] ?? null)
+                    ? mb_substr((string) $result['last_error_message'], 0, 300)
+                    : null,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'error' => 'Gagal membaca info webhook: '.mb_substr($e->getMessage(), 0, 300),
+            ];
+        }
+    }
+
+    /**
      * Client HTTP dengan token, timeout, dan retry terbatas.
      */
     private function client(string $token): PendingRequest

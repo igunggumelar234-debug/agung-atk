@@ -27,6 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'pelanggan' => CustomerMiddleware::class,
         ]);
 
+        // Webhook kanal chatbot tidak membawa token CSRF (dikirim Meta/Telegram);
+        // keaslian pesannya diverifikasi lewat token verifikasi WhatsApp,
+        // signature HMAC Meta, dan secret token Telegram di dalam controller.
+        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+
         // Akun dinonaktifkan Admin -> logout di seluruh rute ber-web
         // (berjalan setelah StartSession sehingga sesi pembaca valid).
         // SecurityHeaders: header keamanan dasar pada semua respons web.

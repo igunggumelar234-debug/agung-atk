@@ -27,6 +27,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\Seller\OrderController as SellerOrderController;
+use App\Http\Controllers\WebhookController;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -71,6 +72,18 @@ Route::get('/', function () {
 Route::post('/home/chat', [AIController::class, 'homeChat'])
     ->middleware('throttle:20,1')
     ->name('home.chat');
+
+// Webhook kanal chatbot (publik — keasliannya divalidasi oleh token
+// verifikasi WhatsApp, signature HMAC Meta, dan secret token Telegram).
+// CSRF dikecualikan untuk pola 'webhooks/*' pada bootstrap/app.php.
+Route::middleware('throttle:60,1')->group(function (): void {
+    Route::get('/webhooks/whatsapp', [WebhookController::class, 'whatsappVerify'])
+        ->name('webhooks.whatsapp.verify');
+    Route::post('/webhooks/whatsapp', [WebhookController::class, 'whatsappReceive'])
+        ->name('webhooks.whatsapp.receive');
+    Route::post('/webhooks/telegram', [WebhookController::class, 'telegramReceive'])
+        ->name('webhooks.telegram.receive');
+});
 
 // Katalog Produk (publik: tamu & semua role)
 Route::get('/products', [CatalogController::class, 'index'])->name('products.index');
@@ -123,6 +136,13 @@ Route::middleware('auth')->group(function () {
     // throttle:10,1 -> ganti password memverifikasi hash (loop berat); tanpa batas,
     // sesi yang dicuri bisa menebak current_password tanpa henti.
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:10,1')->name('profile.password');
+    // Tautan akun ke kanal chatbot (WhatsApp/Telegram) via kode verifikasi.
+    // throttle:6,1 -> mencegah pembuatan kode berulang untuk brute-force.
+    Route::post('/profile/channels/{channel}/code', [ProfileController::class, 'requestChannelCode'])
+        ->middleware('throttle:6,1')
+        ->name('profile.channel.code');
+    Route::post('/profile/channels/{channel}/unlink', [ProfileController::class, 'unlinkChannel'])
+        ->name('profile.channel.unlink');
 });
 
 // Autentikasi (Tamu / Guest)
@@ -221,6 +241,9 @@ Route::middleware('auth')->group(function () {
             Route::post('notifications/telegram/chat-id', [AdminNotificationController::class, 'resolveTelegramChatId'])
                 ->name('notifications.telegram.chat-id')
                 ->middleware('throttle:10,1');
+            Route::post('notifications/connections', [AdminNotificationController::class, 'testConnections'])
+                ->name('notifications.connections')
+                ->middleware('throttle:6,1'); // uji koneksi memanggil API luar (getMe/graph)
         });
     });
 

@@ -50,6 +50,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Identitas kanal terverifikasi (WhatsApp/Telegram) milik pengguna.
+     */
+    public function channelIdentities(): HasMany
+    {
+        return $this->hasMany(ChannelIdentity::class);
+    }
+
+    /**
      * Relasi ke daftar alamat pengguna.
      */
     public function addresses(): HasMany

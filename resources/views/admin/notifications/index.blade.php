@@ -75,6 +75,253 @@
     </div>
 </div>
 
+{{-- Status integrasi chatbot WhatsApp & Telegram (webhook masuk + uji koneksi) --}}
+<div class="card card-custom mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-chat-dots text-primary me-1"></i> Integrasi Chatbot (WhatsApp &amp; Telegram)</span>
+        <form method="POST" action="{{ route('admin.notifications.connections') }}">
+            @csrf
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-plug me-1"></i> Uji Koneksi
+            </button>
+        </form>
+    </div>
+    <div class="row g-0">
+        {{-- WhatsApp Cloud API --}}
+        <div class="col-12 col-md-6 border-end-md">
+            <div class="p-3 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="fw-semibold"><i class="bi bi-whatsapp me-1 text-primary"></i> WhatsApp Cloud API</span>
+                    @if (! $integration['whatsapp']['enabled'])
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Nonaktif (WHATSAPP_ENABLED=false)</span>
+                    @elseif ($integration['whatsapp']['configured'])
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Siap</span>
+                    @else
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Menunggu Kredensial</span>
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Nomor admin:</span>
+                    <span class="fw-semibold">{{ $integration['whatsapp']['admin_number'] }}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Mode pesan:</span>
+                    <span class="fw-semibold">{{ $integration['whatsapp']['message_mode'] }}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Webhook masuk:</span>
+                    <code>{{ $integration['whatsapp']['webhook_url'] }}</code>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Pesan webhook terakhir:</span>
+                    {{ $integration['whatsapp']['last_webhook_at'] !== null
+                        ? \Illuminate\Support\Carbon::parse($integration['whatsapp']['last_webhook_at'])->format('d M Y H:i')
+                        : 'belum pernah' }}
+                </div>
+                @if ($integration['whatsapp']['test'] !== null)
+                    <div class="small">
+                        <span class="text-body-secondary">Uji koneksi:</span>
+                        @if ($integration['whatsapp']['test']['ok'])
+                            <span class="text-success fw-semibold">berhasil</span>
+                            — nomor {{ $integration['whatsapp']['test']['display_phone'] ?? '-' }}
+                        @else
+                            <span class="text-danger fw-semibold">gagal</span>
+                            — {{ $integration['whatsapp']['test']['error'] ?? 'tidak diketahui' }}
+                        @endif
+                    </div>
+                @endif
+                @if (! $integration['whatsapp']['configured'])
+                    <div class="small mt-1">
+                        <span class="text-body-secondary">Variabel <code>.env</code> yang belum diisi:</span>
+                        @foreach ($integration['whatsapp']['missing'] as $envVar)
+                            <code class="d-inline-block me-1">{{ $envVar }}</code>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Telegram Bot API --}}
+        <div class="col-12 col-md-6">
+            <div class="p-3 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="fw-semibold"><i class="bi bi-telegram me-1 text-primary"></i> Telegram Bot API</span>
+                    @if (! $integration['telegram']['enabled'])
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Nonaktif (TELEGRAM_ENABLED=false)</span>
+                    @elseif ($integration['telegram']['configured'])
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Siap</span>
+                    @else
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Belum Lengkap</span>
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Username bot:</span>
+                    <span class="fw-semibold">{{ $integration['telegram']['bot_username'] ?? 'belum diatur (TELEGRAM_BOT_USERNAME)' }}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Chat ID admin:</span>
+                    <span class="fw-semibold">{{ $integration['telegram']['chat_id'] ?: '-' }}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Secret webhook:</span>
+                    @if ($integration['telegram']['webhook_secret_set'])
+                        <span class="fw-semibold">terisi</span>
+                    @else
+                        <span class="text-warning fw-semibold">belum (wajib untuk webhook masuk)</span>
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Webhook masuk:</span>
+                    <code>{{ $integration['telegram']['webhook_url'] }}</code>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Pesan webhook terakhir:</span>
+                    {{ $integration['telegram']['last_webhook_at'] !== null
+                        ? \Illuminate\Support\Carbon::parse($integration['telegram']['last_webhook_at'])->format('d M Y H:i')
+                        : 'belum pernah' }}
+                </div>
+                @if ($integration['telegram']['test'] !== null)
+                    <div class="small">
+                        <span class="text-body-secondary">Uji koneksi:</span>
+                        @if ($integration['telegram']['test']['ok'])
+                            <span class="text-success fw-semibold">berhasil</span>
+                            — {{ $integration['telegram']['test']['username'] ?? '?' }}
+                            @if (($integration['telegram']['test']['username_matches'] ?? null) === false)
+                                <span class="text-danger">(berbeda dari TELEGRAM_BOT_USERNAME)</span>
+                            @endif
+                            @if (array_key_exists('webhook', $integration['telegram']['test']))
+                                <br>Status webhook:
+                                @if ($integration['telegram']['test']['webhook']['url'] ?? null)
+                                    terpasang, {{ $integration['telegram']['test']['webhook']['pending'] ?? 0 }} update antre
+                                @else
+                                    belum dipasang
+                                @endif
+                                @if (! empty($integration['telegram']['test']['webhook']['last_error']))
+                                    — <span class="text-danger">{{ $integration['telegram']['test']['webhook']['last_error'] }}</span>
+                                @endif
+                            @endif
+                        @else
+                            <span class="text-danger fw-semibold">gagal</span>
+                            — {{ $integration['telegram']['test']['error'] ?? 'tidak diketahui' }}
+                        @endif
+                    </div>
+                @endif
+                @if (! $integration['telegram']['configured'])
+                    <div class="small mt-1">
+                        <span class="text-body-secondary">Variabel <code>.env</code> yang belum diisi:</span>
+                        @foreach ($integration['telegram']['missing'] as $envVar)
+                            <code class="d-inline-block me-1">{{ $envVar }}</code>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+    <div class="card-footer small text-body-secondary">
+        Token &amp; secret tidak pernah ditampilkan di halaman ini.
+        Akun terhubung: <strong>{{ $integration['linked_accounts'] }}</strong>.
+        @if ($integration['test_at'] !== null)
+            Terakhir diuji {{ \Illuminate\Support\Carbon::parse($integration['test_at'])->format('d M Y H:i') }}.
+        @endif
+        @if ($integration['last_sent_at'] !== null)
+            Pengiriman terakhir {{ \Illuminate\Support\Carbon::parse($integration['last_sent_at'])->format('d M Y H:i') }}.
+        @endif
+    </div>
+</div>
+
+{{-- Status sistem: pengantrean notifikasi & provider AI (tanpa rahasia) --}}
+<div class="card card-custom mb-4">
+    <div class="card-header">
+        <i class="bi bi-activity text-primary me-1"></i> Status Sistem &amp; Provider AI
+    </div>
+    <div class="row g-0">
+        {{-- Pengantrean --}}
+        <div class="col-12 col-md-6 border-end-md">
+            <div class="p-3 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="fw-semibold"><i class="bi bi-hourglass-split me-1 text-primary"></i> Pengantrean Notifikasi</span>
+                    @if ($system['queue_enabled'])
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Antrean aktif</span>
+                    @else
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Kirim langsung</span>
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Koneksi antrean:</span>
+                    <code>QUEUE_CONNECTION={{ $system['queue_connection'] }}</code>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Job gagal:</span>
+                    @if ($system['failed_jobs'] > 0)
+                        <span class="text-danger fw-semibold">{{ $system['failed_jobs'] }}</span>
+                        — periksa <code>php artisan queue:failed</code>
+                    @else
+                        <span class="text-success fw-semibold">tidak ada</span>
+                    @endif
+                </div>
+                @if ($system['queue_enabled'])
+                <div class="small text-body-secondary">
+                    Worker harus berjalan agar pesan terkirim:
+                    <code>php artisan queue:work</code>. Kegagalan job memberi
+                    tahu admin via kejadian <code>system.issue</code>.
+                </div>
+                @else
+                <div class="small text-body-secondary">
+                    Notifikasi dikirim langsung dalam request (tanpa antrean).
+                </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Provider AI --}}
+        <div class="col-12 col-md-6">
+            <div class="p-3 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="fw-semibold"><i class="bi bi-robot me-1 text-primary"></i> Provider AI Chatbot</span>
+                    @if ($system['ai_key_set'])
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Kunci terisi</span>
+                    @else
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Belum dikonfigurasi</span>
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Endpoint:</span>
+                    <code>{{ $system['ai_url'] !== '' ? $system['ai_url'] : 'belum diatur (AI_URL)' }}</code>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Model:</span>
+                    <span class="fw-semibold">{{ $system['ai_model'] !== '' ? $system['ai_model'] : 'belum diatur (AI_MODEL)' }}</span>
+                </div>
+                <div class="small">
+                    <span class="text-body-secondary">Percobaan terakhir:</span>
+                    @if ($system['ai_last'] !== null)
+                        @if ($system['ai_last']['ok'])
+                            <span class="text-success fw-semibold">berhasil</span>
+                            (HTTP {{ $system['ai_last']['status'] ?? '-' }})
+                        @else
+                            <span class="text-danger fw-semibold">gagal</span>
+                            @if (! empty($system['ai_last']['status']))
+                                (HTTP {{ $system['ai_last']['status'] }})
+                            @elseif (! empty($system['ai_last']['reason']))
+                                — {{ $system['ai_last']['reason'] }}
+                            @endif
+                        @endif
+                        pada {{ \Illuminate\Support\Carbon::parse($system['ai_last']['at'])->format('d M Y H:i') }}
+                    @else
+                        <span class="text-body-secondary">belum pernah (kirim pesan chatbot untuk mencoba)</span>
+                    @endif
+                </div>
+                @if (! $system['ai_key_set'])
+                <div class="small text-body-secondary mt-1">
+                    Tanpa <code>AI_API_KEY</code> chatbot tetap menjawab memakai
+                    pengetahuan lokal (mode fallback).
+                </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4 mb-4">
     {{-- 2. Pengaturan saluran & kejadian --}}
     <div class="col-12 col-xl-7">
@@ -304,7 +551,7 @@
                 <tr>
                     <td class="small text-nowrap">{{ $log->created_at?->format('d M Y H:i') }}</td>
                     <td>
-                        <div class="small fw-semibold">{{ $events[$log->event_key]['label'] ?? strtoupper($log->event_key) }}</div>
+                        <div class="small fw-semibold">{{ $eventLabels[$log->event_key] ?? strtoupper($log->event_key) }}</div>
                         <code class="small text-body-secondary">{{ $log->event_key }}</code>
                         @if ($log->order)
                             <div class="small"><a href="{{ route('admin.orders.show', $log->order) }}">#{{ $log->order->order_number }}</a></div>

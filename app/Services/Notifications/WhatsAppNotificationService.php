@@ -65,7 +65,8 @@ class WhatsAppNotificationService
     /**
      * Validasi & normalisasi nomor telepon ke format internasional tanpa '+'.
      *
-     * Format Indonesia: 089697358716 -> 6289697358716.
+     * Kode negara bawaan dari WHATSAPP_DEFAULT_COUNTRY_CODE ('62' Indonesia):
+     * 089697358716 -> 6289697358716.
      * Mengembalikan null bila nomor tidak valid.
      */
     public static function normalizeInternational(?string $raw): ?string
@@ -73,6 +74,9 @@ class WhatsAppNotificationService
         if ($raw === null) {
             return null;
         }
+
+        $countryCode = preg_replace('/\D+/', '', (string) config('services.whatsapp.default_country_code'))
+            ?: '62';
 
         $trimmed = trim($raw);
         $digits = preg_replace('/\D+/', '', $trimmed);
@@ -84,11 +88,11 @@ class WhatsAppNotificationService
         if (str_starts_with($trimmed, '+')) {
             $number = $digits;
         } elseif (str_starts_with($digits, '0')) {
-            $number = '62'.substr($digits, 1);
-        } elseif (str_starts_with($digits, '62')) {
+            $number = $countryCode.substr($digits, 1);
+        } elseif (str_starts_with($digits, $countryCode)) {
             $number = $digits;
         } elseif (str_starts_with($digits, '8')) {
-            $number = '62'.$digits;
+            $number = $countryCode.$digits;
         } else {
             $number = $digits;
         }
