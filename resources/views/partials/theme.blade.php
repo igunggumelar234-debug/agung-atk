@@ -10,6 +10,11 @@
         --atk-primary-hover: #1e40af;
         --atk-primary-soft: #eff6ff;
         --atk-secondary: #0f172a;
+        /* Latar sidebar dashboard: SELALU gelap di kedua mode. Teks sidebar
+           (#94a3b8, putih saat hover/aktif) didesain untuk latar gelap, jadi
+           jangan memakai --atk-secondary yang nilainya berubah per tema.
+           Mode gelap memakai #1e293b (panel) agar tetap terpisah dari konten. */
+        --atk-sidebar-bg: #0f172a;
         --atk-accent: #f59e0b;
         --atk-accent-hover: #d97706;
         --atk-bg: #f8fafc;
@@ -396,6 +401,7 @@
         --atk-primary-hover: #60a5fa;
         --atk-primary-soft: #172554;
         --atk-secondary: #f1f5f9;
+        --atk-sidebar-bg: #1e293b;
         --atk-accent: #fbbf24;
         --atk-accent-hover: #f59e0b;
         --atk-bg: #0f172a;

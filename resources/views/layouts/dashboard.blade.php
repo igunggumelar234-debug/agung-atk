@@ -36,7 +36,7 @@
         /* ============================= Sidebar ============================= */
         .dashboard-sidebar {
             width: 260px;
-            background-color: var(--atk-secondary);
+            background-color: var(--atk-sidebar-bg);
             color: #94a3b8;
             flex-shrink: 0;
             display: flex;

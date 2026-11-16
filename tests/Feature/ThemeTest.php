@@ -69,4 +69,22 @@ class ThemeTest extends TestCase
         $response->assertSee('atkChartColors', false);
         $response->assertSee('atk:theme-changed', false);
     }
+
+    public function test_dashboard_sidebar_uses_dedicated_dark_surface_in_both_modes(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $admin = User::where('email', 'admin@agungatk.com')->firstOrFail();
+
+        $response = $this->actingAs($admin)->get('/admin/dashboard')->assertStatus(200);
+
+        // Latar sidebar memakai variabel khusus, bukan --atk-secondary yang
+        // nilainya berubah per tema (perbaikan AUD-001: kontras teks sidebar
+        // pada mode gelap sebelumnya hanya 2,34:1).
+        $response->assertSee('var(--atk-sidebar-bg)', false);
+
+        // Nilainya tetap gelap di kedua mode: #0f172a (terang) dan #1e293b
+        // (gelap), sehingga teks #94a3b8/putih selalu lolos WCAG AA (>= 4,5:1).
+        $response->assertSee('--atk-sidebar-bg: #0f172a', false);
+        $response->assertSee('--atk-sidebar-bg: #1e293b', false);
+    }
 }
