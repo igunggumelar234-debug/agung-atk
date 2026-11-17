@@ -514,7 +514,7 @@ vendor/bin/pint --dirty --format agent                 # format kode setelah edi
 
 Hasil verifikasi terakhir:
 
-* **PHPUnit: 620/620 tes lulus (2.940 asersi)** — 17 November 2026 (`php artisan test --compact`),
+* **PHPUnit: 645/645 tes lulus (3.050 asersi)** — 18 November 2026 (`php artisan test --compact`),
   mencakup otomasi stok, pembatalan anti-double-restore, proteksi checkout ganda, audit bisnis,
   halaman error, seluruh chatbot (identitas/perintah/intent data/webhook), notifikasi, dan pencarian gambar YOLO.
 * **E2E audit (server hidup): 115/115 cek lulus, 0 broken link** — crawl semua halaman
@@ -585,6 +585,7 @@ Agar tidak menyesatkan — komponen yang **belum tentu aktif** di lingkungan And
 | [`docs/GMAIL_SETUP.md`](docs/GMAIL_SETUP.md) | Panduan email Gmail (App Password SMTP) |
 | [`docs/CHATBOT_DATABASE_KNOWLEDGE.md`](docs/CHATBOT_DATABASE_KNOWLEDGE.md) | Struktur database untuk chatbot + pembaruan pengetahuan |
 | [`docs/CHATBOT_SECURITY.md`](docs/CHATBOT_SECURITY.md) | Pagar keamanan & privasi chatbot |
+| [`docs/CHATBOT_USER_IDENTITY.md`](docs/CHATBOT_USER_IDENTITY.md) | Identitas pengguna login & pencarian akun pelanggan per role |
 
 ---
 
@@ -620,7 +621,7 @@ ai-service/               layanan Python YOLOv8 (server.py, train.py, model terl
 docs/                     PRD/SRS, SDD+UML, audit, testing/CI-CD, panduan video, laporan akhir
 deploy/                   contoh Supervisor, systemd, crontab untuk produksi
 scripts/                  backup database (bash + PowerShell)
-tests/                    40 file — 620 tes fitur & unit
+tests/                    41 file — 645 tes fitur & unit
 .github/workflows/        ci.yml (PHPUnit + Pint + build Vite)
 ```
 
