@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Role;
+use App\Models\User;
 
 /**
  * Identitas chatbot & pemahaman aktor (role) untuk Agung ATK.
@@ -114,14 +115,39 @@ class ChatbotProfile
         .'|\b(?:bisa|dapat|boleh)\s+ngapain\b/i';
 
     /**
-     * Pola pertanyaan identitas PENGGUNA ("siapa saya", "login sebagai apa") —
-     * berbeda dari identitas chatbot; jawabannya memakai role dari session.
+     * Pola pertanyaan identitas PENGGUNA ("siapa saya", "login sebagai apa",
+     * "nama akun saya siapa", "akun ini atas nama siapa", typo & bahasa
+     * sehari-hari) — berbeda dari identitas chatbot; jawabannya memakai
+     * nama & role dari session backend, bukan dari teks ketikan.
      */
     private const WHOAMI_PATTERN = '/\b(?:siapa|sapa)\s+(?:diri\s+)?(?:saya|sya|sy|aku|aq|gue|gw)\b'
         .'|\b(?:saya|sya|aku|aq|gue|gw)\s+(?:ini\s+)?siapa\b'
         .'|\b(?:akun|peran|role)\s+(?:saya|aku|gue|gw)\b[\s\S]{0,12}\b(?:apa|siapa)\b'
         .'|\b(?:saya|sya|aku|gue|gw)\s+(?:login|masuk|terdaftar)\s+(?:sebagai|jadi)\s+(?:apa|siapa)\b'
-        .'|\b(?:login|masuk)\s+sebagai\s+(?:apa|siapa)\b/i';
+        .'|\b(?:login|masuk)\s+sebagai\s+(?:apa|siapa)\b'
+        // Nama akun / identitas diri — variasi bahasa sehari-hari & typo ringan.
+        .'|\b(?:apa|siapa)\s+nama\s+(?:akun\s+)?(?:saya|sya|aku|aq|gue|gw)\b'
+        .'|\b(?:nama|username|email)\s+(?:akun|login|profil|profile)\s+(?:saya|sya|aku|aq|gue|gw)\b'
+        .'|\b(?:kmu|kamu|anda|lu|bot|kawan)\b[\s\S]{0,25}\btahu\b[\s\S]{0,25}'
+        .'(?:nama|akun)\s+(?:saya|sya|aku|aq|gue|gw)\b'
+        .'|\b(?:akun|username|email|profil|profile)\s+(?:ini|saya|aku)?\b[\s\S]{0,15}'
+        .'atas\s+nama\s+(?:siapa|apa)\b'
+        .'|\b(?:saya|aku|gue|gw)\s+(?:login|masuk)\b[\s\S]{0,30}\b(?:akun\s+apa|pakai\s+akun\s+siapa)\b'
+        .'|\b(?:siapa|apa)\s+nama\s+akun\s+ini\b/i';
+
+    /**
+     * Pola pertanyaan status pendaftaran AKUN DIRI SENDIRI
+     * ("apakah saya sudah terdaftar?", "akun ini sudah terdaftar?") —
+     * sengaja mensyaratkan kata ganti diri agar pertanyaan tentang akun
+     * pelanggan lain jatuh ke jalur pencarian data (ChatbotDataService).
+     */
+    private const REGISTERED_PATTERN = '/\b(?:saya|sya|aku|aq|gue|gw|akun\s+saya|akun\s+ini|'
+        .'username\s+saya|email\s+saya|profil\s+saya)\b[\s\S]{0,30}'
+        .'(?:sudah|udah|pernah|already)?\s*'
+        .'(?:terdaftar|teregistrasi|punya\s+akun|daftar|register|registrasi)\b'
+        .'|\b(?:apakah|udahkah|sudahkah|akah)\b[\s\S]{0,25}'
+        .'(?:saya|sya|aku|akun\s+saya|akun\s+ini)\b[\s\S]{0,20}'
+        .'(?:terdaftar|punya\s+akun|daftar|register)\b/i';
 
     /**
      * Pola pertanyaan identitas chatbot ("siapa kamu", "namamu apa", dst.).
@@ -165,23 +191,82 @@ class ChatbotProfile
     }
 
     /**
-     * Jawaban identitas pengguna — role & status login dari SESSION BACKEND
-     * (bukan dari teks ketikan). Tidak pernah mengarang nama pengguna.
+     * Apakah pesan menanyakan status pendaftaran AKUN DIRI SENDIRI
+     * ("apakah saya sudah terdaftar?")?
      */
-    public function whoAmIReply(bool $loggedIn, ?string $roleName): string
+    public function isRegisteredQuestion(string $lower): bool
     {
-        if (! $loggedIn) {
+        return preg_match(self::REGISTERED_PATTERN, $lower) === 1;
+    }
+
+    /**
+     * Jawaban identitas pengguna — nama akun (users.name, fallback
+     * employee_code) & role dari SESSION BACKEND + database (bukan dari
+     * teks ketikan). Tidak pernah mengarang nama pengguna: bila nama tidak
+     * tercatat, sampaikan apa adanya.
+     */
+    public function whoAmIReply(?User $user): string
+    {
+        if ($user === null) {
             return self::GUEST_IDENTITY_REPLY;
         }
 
-        $role = $roleName !== null ? Role::where('name', $roleName)->first() : null;
+        $role = $user->role;
 
-        if ($role === null || $this->roleKey($roleName) === null) {
+        if ($role === null || $this->roleKey($role->name) === null) {
             return self::UNVERIFIED_ROLE_REPLY;
         }
 
-        return 'Anda sedang menggunakan Agung ATK dengan peran '.$roleName.'. '
-            .'Saya dapat membantu menjelaskan fitur yang tersedia untuk '.$roleName.'.';
+        $accountName = $this->accountName($user);
+
+        $intro = $accountName !== null
+            ? 'Nama akun Anda adalah '.$accountName.'. '
+            : 'Nama akun belum tercatat pada profil Anda. ';
+
+        return $intro
+            .'Anda sedang menggunakan Agung ATK dengan peran '.$role->name.'. '
+            .'Saya dapat membantu menjelaskan fitur yang tersedia untuk '.$role->name.'.';
+    }
+
+    /**
+     * Jawaban "apakah saya sudah terdaftar?" — diverifikasi terhadap akun
+     * NYATA di database (keberadaan + status aktif), bukan klaim ketikan.
+     */
+    public function registeredReply(?User $user): string
+    {
+        if ($user === null) {
+            return 'Anda belum login, jadi saya tidak dapat memverifikasi status pendaftaran akun. '
+                .'Silakan login — bila belum punya akun, daftar terlebih dahulu.';
+        }
+
+        $roleName = $user->role?->name ?? '-';
+        $accountName = $this->accountName($user);
+
+        $intro = $accountName !== null
+            ? 'Ya, akun Anda terdaftar di Agung ATK atas nama '.$accountName.' dengan peran '.$roleName.'. '
+            : 'Ya, akun Anda terdaftar di Agung ATK dengan peran '.$roleName.' (nama belum tercatat). ';
+
+        return $intro
+            .((bool) $user->is_active
+                ? 'Status akun: aktif.'
+                : 'Status akun: nonaktif — hubungi administrator untuk mengaktifkan kembali.');
+    }
+
+    /**
+     * Nama akun untuk ditampilkan: name → employee_code → null.
+     * Mengembalikan null (bukan nama karangan) bila keduanya kosong.
+     */
+    private function accountName(User $user): ?string
+    {
+        foreach ([$user->name, $user->employee_code] as $candidate) {
+            $name = trim((string) $candidate);
+
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        return null;
     }
 
     /**

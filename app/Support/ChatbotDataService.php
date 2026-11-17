@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,23 @@ class ChatbotDataService
      * Batas baris untuk setiap daftar agar jawaban tetap ringkas.
      */
     private const MAX_LIST = 5;
+
+    /**
+     * Batas baris daftar akun pelanggan (hanya admin).
+     */
+    private const MAX_CUSTOMER_LIST = 10;
+
+    /**
+     * Penolakan baku atas pertanyaan informasi AKUN yang tidak berhak
+     * diakses peran tersebut (spesifikasi privasi chatbot).
+     */
+    private const ACCOUNT_DENIED_REPLY = 'Maaf, Anda tidak memiliki izin untuk melihat informasi akun tersebut.';
+
+    /**
+     * Penolakan baku atas pertanyaan informasi akun bagi tamu (belum login).
+     */
+    private const GUEST_ACCOUNT_REPLY = 'Anda belum login — silakan login terlebih dahulu '
+        .'untuk menanyakan informasi akun pelanggan.';
 
     /**
      * Deteksi intent data lalu susun jawabannya.
@@ -131,6 +149,28 @@ class ChatbotDataService
             return null;
         }
 
+        // 3b. Nama pelanggan terkait penugasan/pesanan SENDIRI
+        //     ("siapa nama pelanggan pesanan yang saya antar?") — diskop per
+        //     peran; bukan pencarian daftar global.
+        if ($this->matchesShipmentCustomer($lower)) {
+            return 'shipment_customer';
+        }
+
+        // 3c. Informasi akun pelanggan: hitung jumlah → daftar → pencarian
+        //     nama/username. Otorisasi per role ditegakkan saat jawaban
+        //     disusun; deteksi di sini hanya memetakan maksud pesan.
+        if ($this->matchesCustomerCount($lower)) {
+            return 'customer_count';
+        }
+
+        if ($this->matchesCustomerList($lower)) {
+            return 'customer_list';
+        }
+
+        if ($this->matchesCustomerSearch($lower)) {
+            return 'customer_search';
+        }
+
         // 4. Stok menipis (sebelum jumlah produk: "berapa produk stok hampir habis").
         if (preg_match(
             '/\bhampir\s+habis\b|\bmenipis\b|\bstok(?:nya)?\s+(?:rendah|tinggal|sisa|sedikit)\b|\bstok\s+rendah\b/i',
@@ -179,6 +219,10 @@ class ChatbotDataService
             'order_lookup' => $this->orderLookupReply($lower, $user),
             'tracking_lookup' => $this->trackingLookupReply($lower, $user),
             'my_shipment' => $this->myShipmentReply($user),
+            'shipment_customer' => $this->shipmentCustomerReply($user),
+            'customer_count' => $this->customerCountReply($user),
+            'customer_list' => $this->customerListReply($user),
+            'customer_search' => $this->customerSearchReply($lower, $user),
             'low_stock' => $this->lowStockReply(),
             'best_selling' => $this->bestSellingReply(),
             'revenue' => $this->isStaff($user) ? $this->revenueReply($lower) : $this->staffOnlyReply(),
@@ -520,8 +564,9 @@ class ChatbotDataService
     }
 
     /**
-     * Ringkasan satu pesanan untuk penerima yang BERHAK (tanpa data pribadi
-     * pihak lain — hanya nomor, status, total, pembayaran, pengiriman).
+     * Ringkasan satu pesanan untuk penerima yang BERHAK (hanya nomor,
+     * status, total, pembayaran, pengiriman, serta nama pelanggan pesanan —
+     * penerima sudah lolos pemeriksaan otorisasi sebelum fungsi ini dipanggil).
      */
     private function orderSummary(Order $order, ?Shipment $shipment): string
     {
@@ -530,6 +575,10 @@ class ChatbotDataService
         $lines = ['Pesanan '.$order->order_number.': status '.$order->status
             .', Rp '.number_format((float) $order->grand_total, 0, ',', '.')
             .' — dibuat '.$order->created_at?->format('d M Y H:i').' WIB.'];
+
+        if ($order->user?->name !== null) {
+            $lines[] = 'Pelanggan: '.$order->user->name.'.';
+        }
 
         $lines[] = 'Pembayaran: '.($payment !== null
             ? $payment->status.' ('.$payment->method.')'
@@ -592,6 +641,362 @@ class ChatbotDataService
     /* =====================================================================
      | UTILITAS INTENT, WAKTU, & HAK AKSES
      * ===================================================================*/
+
+    /* =====================================================================
+     | INFORMASI AKUN PELANGGAN — IDENTITAS, HITUNGAN, DAFTAR, PENCARIAN
+     | (baca-only; otorisasi per role ditegakkan di SERVER)
+     * ===================================================================*/
+
+    /**
+     * Cakupan informasi akun pelanggan per role dari session backend.
+     *
+     * - full: admin — hitung, daftar, dan pencarian nama/username.
+     * - search: anggota — hitung & pencarian nama spesifik; tanpa daftar
+     *   seluruh akun (anggota bukan pengelola akun).
+     * - none: kurir & pelanggan — hanya identitas & penugasan sendiri.
+     * - guest: tamu — belum login.
+     *
+     * @return 'full'|'search'|'none'|'guest'
+     */
+    private function customerAccountScope(?User $user): string
+    {
+        if ($user === null) {
+            return 'guest';
+        }
+
+        if ($user->isAdmin()) {
+            return 'full';
+        }
+
+        if ($user->isAnggota()) {
+            return 'search';
+        }
+
+        return 'none';
+    }
+
+    /**
+     * Query builder akun pelanggan (role 'pelanggan') — dipakai bersama
+     * oleh hitungan, daftar, dan pencarian.
+     *
+     * @return Builder<User>
+     */
+    private function customerQuery()
+    {
+        return User::whereHas('role', function ($query): void {
+            $query->where('name', 'pelanggan');
+        });
+    }
+
+    /**
+     * "Siapa nama pelanggan pesanan yang saya antar?" — pertanyaan tentang
+     * pelanggan yang terkait dengan penugasan/pesanan yang disebut pengguna.
+     * BUKAN pencarian daftar global.
+     */
+    private function matchesShipmentCustomer(string $lower): bool
+    {
+        if (preg_match('/\b(?:pelanggan|customer|pemesan|penerima)\b/', $lower) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\b(?:saya|ku|aku|gue|gw)\s+antar(?:kan)?\b|\bsaya\s+kirim\b/i', $lower) === 1
+            || preg_match('/\b(?:pesanan|pengiriman|paket|tugas|order)\s+(?:saya|ku|aku|gue|gw)\b/i', $lower) === 1
+            || preg_match('/\byang\s+(?:saya\s+)?antar\b/i', $lower) === 1;
+    }
+
+    /**
+     * "Berapa jumlah pelanggan yang terdaftar?" — termasuk singkatan
+     * sehari-hari (brp, jml, byk) dan urutan terbalik.
+     */
+    private function matchesCustomerCount(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:berapa(?:kah)?|brp|jumlah|jml|jmlh|total|banyak(?:nya)?|byk)\s+'
+            .'(?:jumlah\s+|jml\s+|jmlh\s+|banyak\s+|byk\s+|orang\s+|akun\s+|total\s+)*'
+            .'(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:pelanggan|customer)\b[\s\S]{0,30}\b(?:berapa(?:kah)?|brp|jumlah|jml|total)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:ada|punya)\s+(?:berapa(?:kah)?|brp)\s+(?:orang\s+|akun\s+)?(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Sebutkan/daftar pelanggan yang terdaftar" — permintaan daftar.
+     * Pertanyaan yang menyebut nama/username spesifik dialihkan ke pencarian.
+     */
+    private function matchesCustomerList(string $lower): bool
+    {
+        if (preg_match(
+            '/\b(?:bernama|dengan\s+nama|namanya|atas\s+nama|username|email)\b'
+            .'|\bnama\s+(?:pelanggan|customer)\s+(?!yang|terdaftar|ada\b)/i',
+            $lower
+        ) === 1) {
+            return false;
+        }
+
+        return preg_match(
+            '/\b(?:sebutkan|daftarkan|daftar|tampilkan|list|sebut|tulis)\b[\s\S]{0,50}'
+            .'(?:daftar\s+|nama[-\s]?nama\s+|semua\s+|seluruh\s+)*(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\bsiapa\s+(?:saja|sajakah)?\s*(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\bnama[-\s]?nama\s+(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * Pencarian akun pelanggan by nama/username — hanya bila pesan punya
+     * konteks akun + penanda pencarian, ATAU pola "X sudah terdaftar",
+     * dan bukan pertanyaan tentang diri sendiri (itu urusan jalur identitas).
+     */
+    private function matchesCustomerSearch(string $lower): bool
+    {
+        // Pertanyaan diri sendiri → biarkan jalur identitas (siapa saya /
+        // sudah terdaftar) yang menjawab, bukan pencarian pelanggan.
+        if (preg_match('/\b(?:saya|sya|aku|aq|gue|gw|diri\s+(?:saya|ku))\b/', $lower) === 1) {
+            return false;
+        }
+
+        $hasCustomerContext = preg_match(
+            '/\b(?:pelanggan|customer|username|user\s*name|akun|email)\b/i',
+            $lower
+        ) === 1;
+
+        $hasSearchMarker = preg_match(
+            '/\b(?:bernama|namanya|nama|terdaftar|teregistrasi|daftar|register|registrasi|'
+            .'cari|carikan|cek|temukan|punya\s+akun|tersedia|siapa|ada)\b/i',
+            $lower
+        ) === 1;
+
+        if ($hasCustomerContext && $hasSearchMarker) {
+            return true;
+        }
+
+        // "agung gumelar sudah terdaftar belum?" — tanpa kata "pelanggan".
+        return preg_match(
+            '/\b[\w\s.@-]{3,60}?\s+(?:sudah|udah|pernah)\s+'
+            .'(?:terdaftar|teregistrasi|daftar|register)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * Ambil kata kunci nama/username dari pesan pencarian. Hanya kata yang
+     * tersisa setelah membuang kata penghubung — dipakai sebagai parameter
+     * LIKE terikat (tanpa SQL bebas; wildcard pengguna di-escape).
+     */
+    private function customerSearchKeyword(string $lower): string
+    {
+        $keyword = (string) preg_replace('/[?!,.]+/', ' ', $lower);
+        $keyword = (string) preg_replace(
+            '/\b(?:di\s+)?(?:sistem\s+)?agung\s+atk\b/',
+            ' ',
+            $keyword
+        );
+        $keyword = (string) preg_replace(
+            '/\b(?:siapa|apakah|adakah|ada|kah|sudah|udah|pernah|terdaftar|teregistrasi|'
+            .'daftar|register|registrasi|belum|blm|bisa|dapat|tersedia|pelanggan|customer|'
+            .'akun|username|user|email|nama|bernama|dengan|namanya|orang|ini|tersebut|yang|'
+            .'untuk|cari|carikan|cek|temukan|tolong|dong|mas|mbak|kak|pak|bu|list|sebutkan|'
+            .'tampilkan|lihat|periksa|sistem|punya|memiliki|aktif|nonaktif|tidak|bukan|iya|'
+            .'ya|nomor|id|nik|punyakah|akah)\b/',
+            ' ',
+            $keyword
+        );
+        $keyword = (string) preg_replace('/\s+/', ' ', $keyword);
+
+        return trim($keyword);
+    }
+
+    /**
+     * "Berapa jumlah pelanggan yang terdaftar?" — hitungan live dari
+     * database (dengan rincian status akun), sesuai izin per role.
+     */
+    private function customerCountReply(?User $user): string
+    {
+        $scope = $this->customerAccountScope($user);
+
+        if ($scope === 'guest') {
+            return self::GUEST_ACCOUNT_REPLY;
+        }
+
+        if ($scope === 'none') {
+            return self::ACCOUNT_DENIED_REPLY;
+        }
+
+        $query = $this->customerQuery();
+        $total = (int) (clone $query)->count();
+        $aktif = (int) (clone $query)->where('is_active', true)->count();
+
+        if ($total === 0) {
+            return 'Belum ada akun pelanggan yang terdaftar di sistem Agung ATK.';
+        }
+
+        return 'Terdapat '.$total.' pelanggan terdaftar di sistem Agung ATK '
+            .'('.$aktif.' aktif dan '.($total - $aktif).' nonaktif).';
+    }
+
+    /**
+     * "Sebutkan pelanggan yang terdaftar" — daftar nama (tanpa email/HP)
+     * sesuai kewenangan; anggota diarahkan ke pencarian nama spesifik.
+     */
+    private function customerListReply(?User $user): string
+    {
+        $scope = $this->customerAccountScope($user);
+
+        if ($scope === 'guest') {
+            return self::GUEST_ACCOUNT_REPLY;
+        }
+
+        if ($scope === 'none') {
+            return self::ACCOUNT_DENIED_REPLY;
+        }
+
+        if ($scope === 'search') {
+            return 'Daftar seluruh akun pelanggan hanya tersedia untuk admin. '
+                .'Sebutkan nama atau username pelanggan spesifik yang ingin dicari — saya bantu carikan.';
+        }
+
+        $total = (int) $this->customerQuery()->count();
+
+        if ($total === 0) {
+            return 'Belum ada akun pelanggan yang terdaftar di sistem Agung ATK.';
+        }
+
+        $customers = $this->customerQuery()
+            ->orderBy('name')
+            ->limit(self::MAX_CUSTOMER_LIST)
+            ->get(['id', 'name', 'is_active', 'role_id']);
+
+        $lines = ['Daftar pelanggan terdaftar (menampilkan '.$customers->count().' dari '.$total.'):'];
+
+        foreach ($customers->values() as $index => $customer) {
+            $lines[] = ($index + 1).'. '.$customer->name
+                .' — '.((bool) $customer->is_active ? 'aktif' : 'nonaktif');
+        }
+
+        $lines[] = 'Untuk pencarian nama tertentu, sebutkan nama atau username pelanggan yang ingin dicari.';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "Apakah pelanggan bernama X ada?" — pencarian live by nama ATAU
+     * username (email login); kecocokan ganda meminta pembeda yang aman,
+     * kegagalan disampaikan jujur (tanpa mengarang).
+     */
+    private function customerSearchReply(string $lower, ?User $user): string
+    {
+        $scope = $this->customerAccountScope($user);
+
+        if ($scope === 'guest') {
+            return self::GUEST_ACCOUNT_REPLY;
+        }
+
+        if ($scope === 'none') {
+            return self::ACCOUNT_DENIED_REPLY;
+        }
+
+        $keyword = $this->customerSearchKeyword($lower);
+
+        if ($keyword === '') {
+            return 'Sebutkan nama atau username pelanggan yang ingin dicari, '
+                .'misalnya: "ada pelanggan namanya Agung" atau "cek akun dengan username budi@contoh.com".';
+        }
+
+        // LIKE tanpa wildcard bebas: karakter % dan _ dari pengguna di-escape.
+        $like = '%'.addcslashes($keyword, '%_').'%';
+
+        $matches = $this->customerQuery()
+            ->where(function ($query) use ($like): void {
+                $query->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            })
+            ->limit(2)
+            ->get(['id', 'name', 'email', 'is_active', 'role_id', 'employee_code']);
+
+        if ($matches->isEmpty()) {
+            return 'Maaf, saya tidak menemukan akun pelanggan dengan nama tersebut.';
+        }
+
+        $exact = $matches->first(
+            fn (User $customer): bool => mb_strtolower($customer->name) === mb_strtolower($keyword)
+        );
+
+        if ($matches->count() > 1 && $exact === null) {
+            return 'Ditemukan lebih dari satu pelanggan dengan nama serupa. '
+                .'Untuk mempersempit, sebutkan username/email atau ID akun yang berhak Anda akses.';
+        }
+
+        $customer = $exact ?? $matches->first();
+        $status = (bool) $customer->is_active ? 'aktif' : 'nonaktif';
+
+        if (str_contains($keyword, '@')) {
+            return 'Ya, akun dengan username "'.$keyword.'" terdaftar atas nama '.$customer->name
+                .' — status akun '.$status.'.';
+        }
+
+        return 'Ya, pelanggan dengan nama '.$customer->name.' terdaftar di sistem Agung ATK '
+            .'— status akun '.$status.'.';
+    }
+
+    /**
+     * "Siapa nama pelanggan pesanan yang saya antar?" — kurir hanya
+     * mendapat pelanggan penugasan aktif miliknya; staf meminta nomor
+     * pesanan; pelanggan melihat identitas pesanannya sendiri.
+     */
+    private function shipmentCustomerReply(?User $user): string
+    {
+        if ($user === null) {
+            return 'Silakan login — informasi pelanggan pesanan hanya tersedia untuk akun yang login.';
+        }
+
+        if ($user->isCourier()) {
+            $shipment = Shipment::with(['order:id,order_number,user_id', 'order.user:id,name'])
+                ->where('courier_id', $user->id)
+                ->whereIn('status', self::ACTIVE_SHIPMENT_STATUSES)
+                ->latest('id')
+                ->first();
+
+            if ($shipment === null) {
+                return 'Belum ada penugasan aktif untuk akun ini, jadi saya tidak punya data pelanggan '
+                    .'yang sedang diantar. Tugas baru muncul setelah admin menugaskan pesanan kepada Anda.';
+            }
+
+            $line = 'Pelanggan pesanan '.$shipment->order?->order_number.' adalah '
+                .($shipment->order?->user?->name ?? 'belum tercatat').'.';
+
+            if ($shipment->recipient_name !== null && $shipment->recipient_name !== '') {
+                $line .= ' Penerima tercatat: '.$shipment->recipient_name.'.';
+            }
+
+            return $line.' Rincian alamat ada di menu Pengiriman Saya.';
+        }
+
+        if ($user->isAdmin() || $user->isAnggota()) {
+            return 'Sebutkan nomor pesanan (mis. ORD-...) agar saya dapat menampilkan '
+                .'pelanggan pesanan tersebut.';
+        }
+
+        // Pelanggan: identitas pesanan miliknya sendiri.
+        $order = Order::with('user:id,name')
+            ->where('user_id', $user->id)
+            ->latest('id')
+            ->first();
+
+        if ($order === null) {
+            return 'Anda belum memiliki pesanan, jadi belum ada data pelanggan atas pesanan.';
+        }
+
+        return 'Pesanan terbaru Anda tercatat atas nama '.($order->user?->name ?? $user->name).'.';
+    }
 
     private function matchesPaymentPending(string $lower): bool
     {

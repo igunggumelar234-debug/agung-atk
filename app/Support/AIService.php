@@ -135,7 +135,13 @@ class AIService
         // Intent data aktual (PROMPT 8): hasil query backend read-only dihitung
         // SEKALI di sini — dipakai untuk konteks model (API) sekaligus jawaban
         // fallback lokal, agar angka konsisten dan query tidak dijalankan dobel.
-        $dataAnswer = $this->data->reply(mb_strtolower(trim($message)), $user);
+        // Identitas/pendaftaran DIRI dijawab dari session + database lewat
+        // jalur profile — tidak dihitung sebagai pencarian data pelanggan,
+        // agar API mode tidak menerima blok jawaban yang bertentangan.
+        $lower = mb_strtolower(trim($message));
+        $isSelfIdentity = $this->profile->isWhoAmIQuestion($lower)
+            || $this->profile->isRegisteredQuestion($lower);
+        $dataAnswer = $isSelfIdentity ? null : $this->data->reply($lower, $user);
 
         $reply = $this->askApi($conversation, $products, $user, $dataAnswer)
             ?? $this->localReply($message, $products, $user, $dataAnswer);
@@ -506,9 +512,11 @@ class AIService
             .'IDENTITAS & PEMAHAMAN AKTOR:'."\n"
             .'15. Nama kamu: '.ChatbotProfile::NAME.' — asisten virtual pada website Agung ATK. Bila ditanya identitas '
             .'(siapa kamu, namamu apa, apakah kamu manusia/admin), jawab dengan kalimat baku: "'.ChatbotProfile::IDENTITY_REPLY.'"'."\n"
-            .'Bila ditanya identitas PENGGUNA ("siapa saya", "aku siapa", "saya login sebagai apa"), gunakan status '
-            .'login & peran pada KONTEKS DATABASE & PENGGUNA: login false → sampaikan pengguna belum login; peran ada → '
-            .'sebutkan peran itu beserta fitur yang tersedia dengannya — jangan mengarang nama pengguna.'."\n"
+            .'Bila ditanya identitas PENGGUNA ("siapa saya", "aku siapa", "saya login sebagai apa", '
+            .'"apakah saya sudah terdaftar"), gunakan status login & data user pada KONTEKS DATABASE & PENGGUNA: '
+            .'login false → sampaikan pengguna belum login; login true → sebutkan nama akun dari field "nama" '
+            .'(bila ada, apa adanya — jangan mengarang nama lain) beserta peran itu dan fitur yang tersedia '
+            .'dengannya; bila ditanya status pendaftaran, jawab dari keberadaan akun pada konteks user ini.'."\n"
             .'16. Kamu BUKAN manusia dan BUKAN aktor operasional: bukan admin, anggota toko, kurir, maupun pelanggan; '
             .'tidak punya jabatan, akun, atau identitas pribadi. Jangan pernah mengaku sebagai orang/role tertentu, dan '
             .'jangan mengklaim telah melakukan tindakan yang sebenarnya belum dilakukan (mis. "saya telah membatalkan '
@@ -785,7 +793,13 @@ class AIService
         // 1b. Identitas PENGGUNA ("siapa saya?", "saya login sebagai apa?") —
         //     role & status login dari session server, bukan teks ketikan.
         if ($this->profile->isWhoAmIQuestion($lower)) {
-            return $this->profile->whoAmIReply($user !== null, $user?->role?->name);
+            return $this->profile->whoAmIReply($user);
+        }
+
+        // 1b-b. Status pendaftaran AKUN DIRI ("apakah saya sudah terdaftar?") —
+        //       diverifikasi terhadap akun nyata di database.
+        if ($this->profile->isRegisteredQuestion($lower)) {
+            return $this->profile->registeredReply($user);
         }
 
         // 1c. Sapaan multi-bahasa — dibalas dengan bahasa yang sama.
