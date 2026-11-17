@@ -794,7 +794,15 @@ class ChatbotDataService
      */
     private function customerSearchKeyword(string $lower): string
     {
-        $keyword = (string) preg_replace('/[?!,.]+/', ' ', $lower);
+        // Email/username login yang ditulis pengguna dipakai apa adanya —
+        // jangan dipecah oleh pembersih tanda baca atau kata penghubung.
+        if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $lower, $emailMatch) === 1) {
+            return $emailMatch[0];
+        }
+
+        // Tanda baca kalimat dibuang; titik hanya bila di akhir kata/kalimat
+        // agar username seperti "agung.username" tetap utuh.
+        $keyword = (string) preg_replace('/[?!,;:]+|\.+(?=\s|$)/', ' ', $lower);
         $keyword = (string) preg_replace(
             '/\b(?:di\s+)?(?:sistem\s+)?agung\s+atk\b/',
             ' ',

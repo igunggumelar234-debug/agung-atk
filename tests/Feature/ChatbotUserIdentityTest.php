@@ -6,8 +6,8 @@ use App\Models\Order;
 use App\Models\Role;
 use App\Models\Shipment;
 use App\Models\User;
-use App\Support\ChatGuard;
 use App\Support\ChatbotProfile;
+use App\Support\ChatGuard;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -159,11 +159,16 @@ class ChatbotUserIdentityTest extends TestCase
         $this->assertStringContainsString('Status akun: aktif', $reply);
     }
 
-    public function test_registered_question_reports_inactive_account_honestly(): void
+    public function test_inactive_account_is_blocked_from_chat_and_reported_honestly(): void
     {
         $inactive = $this->createCustomer('Akun Nonaktif Uji', ['is_active' => false]);
 
-        $reply = $this->replyAs($inactive, 'apakah akun ini sudah terdaftar?');
+        // Middleware akun menolak sesi chat untuk akun nonaktif (401).
+        $this->chat($inactive, 'Apakah saya sudah terdaftar?')->assertStatus(401);
+
+        // Jalur jawaban chatbot sendiri menyatakan status nonaktif apa adanya
+        // (dipakai bila akun dinonaktifkan di tengah sesi/kanal tertaut).
+        $reply = (new ChatbotProfile)->registeredReply($inactive);
 
         $this->assertStringContainsString('Status akun: nonaktif', $reply);
     }
@@ -196,14 +201,17 @@ class ChatbotUserIdentityTest extends TestCase
         $this->assertStringContainsString($expected.' pelanggan terdaftar', $typo);
     }
 
-    public function test_customer_count_denied_for_courier_customer_and_guest(): void
+    public function test_customer_count_denied_for_courier_and_customer(): void
     {
         $this->assertSame(self::DENIED, $this->replyAs($this->kurir, 'Berapa jumlah pelanggan yang terdaftar?'));
         $this->assertSame(self::DENIED, $this->replyAs($this->pelanggan, 'Berapa jumlah pelanggan yang terdaftar?'));
-        $this->assertStringContainsString(
-            'Anda belum login',
-            $this->replyAs(null, 'Berapa jumlah pelanggan yang terdaftar?')
-        );
+    }
+
+    public function test_customer_count_as_guest_requires_login(): void
+    {
+        $reply = $this->replyAs(null, 'Berapa jumlah pelanggan yang terdaftar?');
+
+        $this->assertStringContainsString('Anda belum login', $reply);
     }
 
     /* =====================================================================
