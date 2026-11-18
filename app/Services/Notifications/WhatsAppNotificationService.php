@@ -49,17 +49,38 @@ class WhatsAppNotificationService
 
         $version = config('services.whatsapp.api_version') ?: 'v21.0';
 
-        $response = $this->client($token)
-            ->post('https://graph.facebook.com/'.$version.'/'.$phoneNumberId.'/messages', $payload);
+        try {
+            $response = $this->client($token)
+                ->post('https://graph.facebook.com/'.$version.'/'.$phoneNumberId.'/messages', $payload);
 
-        // Melempar exception untuk status HTTP error (401/429/500 dst.) beserta detailnya.
-        $response->throw();
+            // Melempar exception untuk status HTTP error (401/429/500 dst.) beserta detailnya.
+            $response->throw();
 
-        if (is_array($response->json('error'))) {
-            throw new RuntimeException(
-                'WhatsApp menolak pesan: '.($response->json('error.message') ?? 'tidak diketahui')
-            );
+            if (is_array($response->json('error'))) {
+                throw new RuntimeException(
+                    'WhatsApp menolak pesan: '.($response->json('error.message') ?? 'tidak diketahui')
+                );
+            }
+        } catch (\Throwable $e) {
+            // Sanitasi: API key/token tidak pernah boleh muncul di pesan
+            // exception (yang selanjutnya tercatat pada log & dashboard).
+            throw new RuntimeException($this->redactSecret($e->getMessage(), $token), 0, $e);
         }
+    }
+
+    /**
+     * Hapus jejak token dari pesan kesalahan sebelum dicatat.
+     */
+    private function redactSecret(string $message, string $token): string
+    {
+        if ($token !== '' && str_contains($message, $token)) {
+            $message = str_replace($token, '[REDACTED]', $message);
+        }
+
+        // Pola token Meta (EAA...) yang mungkin ikut tercetak dari body API.
+        $message = (string) preg_replace('/\bEAA[A-Za-z0-9_\-]{10,}\b/', '[REDACTED]', $message);
+
+        return $message;
     }
 
     /**

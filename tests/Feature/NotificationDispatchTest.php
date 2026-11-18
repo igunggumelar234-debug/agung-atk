@@ -11,6 +11,7 @@ use App\Models\OrderDetail;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Notifications\NotificationMessageFactory;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -707,5 +708,100 @@ class NotificationDispatchTest extends TestCase
             'status' => NotificationLog::STATUS_SENT,
             'order_id' => $payment->order_id,
         ]);
+    }
+
+    /* =====================================================================
+     | LOGIN KEAMANAN, FORMAT PESAN SERAGAM, & AUDIEN ADMIN REGISTRASI
+     * ===================================================================*/
+
+    public function test_login_dispatches_security_notification_to_admin(): void
+    {
+        $this->enableNotifications(false);
+
+        $this->post('/login', [
+            'email' => $this->pelanggan->email,
+            'password' => config('app.seed_password'),
+        ])->assertRedirect();
+
+        $log = NotificationLog::query()
+            ->where('event_key', 'account.login')
+            ->where('channel', 'email')
+            ->where('recipient', config('notifications.admin_email'))
+            ->first();
+
+        $this->assertNotNull($log, 'Login harus mengirim pemberitahuan keamanan ke admin.');
+        $this->assertSame(NotificationLog::STATUS_SENT, $log->status);
+        $this->assertStringContainsString($this->pelanggan->name, (string) $log->body);
+        $this->assertStringContainsString('Alamat IP', (string) $log->body);
+    }
+
+    public function test_notification_messages_have_uniform_header_and_closing(): void
+    {
+        $order = $this->createOrderWithStatus('pending_payment');
+        $factory = app(NotificationMessageFactory::class);
+
+        $bodies = [
+            'order.new' => $factory->make('order.new', ['order' => $order], 'admin')['body'],
+            'account.registered' => $factory->make(
+                'account.registered',
+                ['user' => $this->pelanggan],
+                'customer'
+            )['body'],
+            'account.login' => $factory->make(
+                'account.login',
+                ['user' => $this->pelanggan, 'ip' => '127.0.0.1']
+            )['body'],
+        ];
+
+        foreach ($bodies as $event => $body) {
+            $this->assertStringContainsString(
+                '🔔 NOTIFIKASI APLIKASI',
+                $body,
+                'Pesan '.$event.' wajib berheader notifikasi seragam.'
+            );
+            $this->assertStringContainsString(
+                'Pesan ini dikirim secara otomatis oleh sistem aplikasi.',
+                $body,
+                'Pesan '.$event.' wajib ditutup penutup otomatis.'
+            );
+        }
+
+        // Waktu kejadian tetap tercantum di dalam pesan.
+        $this->assertStringContainsString('Waktu:', $bodies['order.new']);
+    }
+
+    public function test_registration_notifies_admin_about_new_account(): void
+    {
+        $this->enableNotifications(false);
+
+        $email = 'pendaftar_admin_'.uniqid().'@example.com';
+
+        $this->post('/register', [
+            'name' => 'Pengguna Uji Admin',
+            'email' => $email,
+            'phone' => '08987654321',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect('/dashboard');
+
+        // Pemilik akun tetap menerima sapaan selamat datang.
+        $this->assertDatabaseHas('notification_logs', [
+            'event_key' => 'account.registered',
+            'channel' => 'email',
+            'recipient' => $email,
+            'status' => NotificationLog::STATUS_SENT,
+        ]);
+
+        // Admin menerima pemberitahuan aktivitas pengguna baru.
+        $adminLog = NotificationLog::query()
+            ->where('event_key', 'account.registered')
+            ->where('channel', 'email')
+            ->where('recipient', config('notifications.admin_email'))
+            ->first();
+
+        $this->assertNotNull($adminLog, 'Admin wajib diberi tahu tentang pendaftaran akun baru.');
+        $this->assertSame(NotificationLog::STATUS_SENT, $adminLog->status);
+        $this->assertStringContainsString('Pengguna baru mendaftar', (string) $adminLog->body);
+        $this->assertStringContainsString('Pengguna Uji Admin', (string) $adminLog->body);
     }
 }

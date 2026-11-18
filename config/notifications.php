@@ -156,7 +156,14 @@ return [
         ],
         'account.registered' => [
             'label' => 'Pendaftaran akun berhasil',
-            'audiences' => ['customer'],
+            'audiences' => ['customer', 'admin'],
+        ],
+        'account.login' => [
+            'label' => 'Login pengguna berhasil (keamanan)',
+            'audiences' => ['admin'],
+            // Jendela pendek: login berulang oleh pengguna berbeda tetap
+            // terlaporkan, tetapi dispatch ganda dalam hitungan menit tertahan.
+            'window' => 2,
         ],
         'report.daily' => [
             'label' => 'Ringkasan penjualan harian',

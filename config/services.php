@@ -75,7 +75,9 @@ return [
     | bukan nomor admin di bawah ini.
     */
     'whatsapp' => [
-        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        // WHATSAPP_ACCESS_TOKEN adalah nama resmi Meta; WHATSAPP_API_KEY
+        // didukung sebagai alias untuk konfigurasi yang menyebutnya "API Key".
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN') ?: env('WHATSAPP_API_KEY'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
         'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
         // WHATSAPP_CLOUD_API_VERSION (nama resmi Meta) didahulukan; WHATSAPP_API_VERSION

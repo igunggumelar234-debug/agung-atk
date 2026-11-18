@@ -48,6 +48,7 @@ class NotificationMessageFactory
             'shipment.shipping' => $this->shipmentShipping($data, $audience),
             'shipment.delivered' => $this->shipmentDelivered($data, $audience),
             'account.registered' => $this->accountRegistered($data, $audience),
+            'account.login' => $this->accountLogin($data),
             'report.daily' => $this->reportDaily($data),
             'system.issue' => $this->systemIssue($data),
             default => $this->fallback($eventKey, $data),
@@ -520,7 +521,10 @@ class NotificationMessageFactory
     }
 
     /**
-     * Pendaftaran akun berhasil (pemilik akun).
+     * Pendaftaran akun berhasil.
+     *
+     * - Pelanggan: sapaan selamat datang ke pemilik akun.
+     * - Admin: pemberitahuan aktivitas pengguna baru (nama + email + peran).
      *
      * @param  array<string, mixed>  $data
      * @return array{subject: string, body: string}
@@ -529,6 +533,25 @@ class NotificationMessageFactory
     {
         /** @var User $user */
         $user = $data['user'];
+
+        if ($audience === 'admin') {
+            return [
+                'subject' => 'Pendaftaran akun baru: '.$user->name,
+                'body' => $this->lines([
+                    'Halo Admin,',
+                    '',
+                    'Pengguna baru mendaftar di '.config('app.name').':',
+                    '',
+                    '- Nama: '.$user->name,
+                    '- Email: '.$user->email,
+                    '- Peran: '.($user->role?->name ?? '-'),
+                    '- Status: '.($user->is_active ? 'aktif' : 'nonaktif'),
+                    '',
+                    'Periksa data pengguna pada menu Pengguna bila perlu verifikasi.',
+                    ...$this->footer('account.registered', $data, $audience),
+                ]),
+            ];
+        }
 
         return [
             'subject' => 'Pendaftaran akun berhasil',
@@ -542,6 +565,36 @@ class NotificationMessageFactory
                 'Gunakan email tersebut untuk masuk ke akun Anda.',
                 'Jaga kerahasiaan kata sandi Anda — pihak toko tidak pernah memintanya.',
                 ...$this->footer('account.registered', $data, $audience),
+            ]),
+        ];
+    }
+
+    /**
+     * Login pengguna berhasil (pemberitahuan keamanan ke admin).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{subject: string, body: string}
+     */
+    private function accountLogin(array $data): array
+    {
+        /** @var User $user */
+        $user = $data['user'];
+        $ip = isset($data['ip']) ? (string) $data['ip'] : null;
+
+        return [
+            'subject' => 'Login pengguna: '.$user->name,
+            'body' => $this->lines([
+                'Halo Admin,',
+                '',
+                'Login pengguna berhasil masuk ke sistem:',
+                '',
+                '- Nama: '.$user->name,
+                '- Email: '.$user->email,
+                '- Peran: '.($user->role?->name ?? '-'),
+                $ip !== null ? '- Alamat IP: '.$ip : '- Alamat IP: -',
+                '',
+                'Bila ini bukan aktivitas yang Anda kenali, segera periksa keamanan akun.',
+                ...$this->footer('account.login', $data, 'admin'),
             ]),
         ];
     }
@@ -716,11 +769,19 @@ class NotificationMessageFactory
     /**
      * Gabungkan baris pesan menjadi satu badan teks.
      *
+     * Setiap pesan otomatis dibungkus header "🔔 NOTIFIKASI APLIKASI" dan
+     * penutup "Pesan ini dikirim secara otomatis oleh sistem aplikasi."
+     * agar format seragam, profesional, dan mudah dikenali penerima.
+     *
      * @param  list<string>  $lines
      */
     private function lines(array $lines): string
     {
-        return implode("\n", $lines);
+        return implode("\n", array_merge(
+            ['🔔 NOTIFIKASI APLIKASI', ''],
+            $lines,
+            ['', 'Pesan ini dikirim secara otomatis oleh sistem aplikasi.'],
+        ));
     }
 
     /**

@@ -95,18 +95,74 @@
                     @if (! $integration['whatsapp']['enabled'])
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Nonaktif (WHATSAPP_ENABLED=false)</span>
                     @elseif ($integration['whatsapp']['configured'])
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Siap</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Terkonfigurasi</span>
                     @else
-                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Menunggu Kredensial</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Belum Lengkap</span>
                     @endif
                 </div>
                 <div class="small mb-1">
-                    <span class="text-body-secondary">Nomor admin:</span>
-                    <span class="fw-semibold">{{ $integration['whatsapp']['admin_number'] }}</span>
+                    <span class="text-body-secondary">Status konfigurasi:</span>
+                    <span class="fw-semibold {{ $integration['whatsapp']['configured'] ? 'text-success' : 'text-warning-emphasis' }}">
+                        {{ $integration['whatsapp']['configured'] ? 'Terkonfigurasi' : 'Belum Lengkap' }}
+                    </span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Status kredensial:</span>
+                    <span class="fw-semibold {{ $integration['whatsapp']['configured'] ? 'text-success' : 'text-danger' }}">
+                        {{ $integration['whatsapp']['configured'] ? 'Tersedia' : 'Belum Tersedia' }}
+                    </span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Status koneksi API:</span>
+                    @if ($integration['whatsapp']['test'] === null)
+                        <span class="text-body-secondary">belum diuji</span>
+                    @elseif ($integration['whatsapp']['test']['ok'])
+                        <span class="text-success fw-semibold">Berhasil</span>
+                        — nomor {{ $integration['whatsapp']['test']['display_phone'] ?? '-' }}
+                    @else
+                        <span class="text-danger fw-semibold">Gagal</span>
+                        — {{ $integration['whatsapp']['test']['error'] ?? 'tidak diketahui' }}
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Nomor penerima:</span>
+                    <span class="fw-semibold">{{ $integration['whatsapp']['admin_number'] !== '' ? $integration['whatsapp']['admin_number'] : '-' }}</span>
                 </div>
                 <div class="small mb-1">
                     <span class="text-body-secondary">Mode pesan:</span>
                     <span class="fw-semibold">{{ $integration['whatsapp']['message_mode'] }}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Pengiriman pesan terakhir:</span>
+                    @if ($integration['whatsapp']['last_sent'] === null)
+                        <span class="text-body-secondary">belum pernah</span>
+                    @else
+                        @php($lastSent = $integration['whatsapp']['last_sent'])
+                        <span class="fw-semibold {{ $lastSent['status'] === 'sent' ? 'text-success' : ($lastSent['status'] === 'failed' ? 'text-danger' : 'text-body-secondary') }}">
+                            {{ $lastSent['status'] === 'sent' ? 'Terkirim' : ($lastSent['status'] === 'failed' ? 'Gagal' : ucfirst($lastSent['status'])) }}
+                        </span>
+                        — {{ \Illuminate\Support\Carbon::parse($lastSent['at'])->format('d M Y H:i') }}
+                        @if ($lastSent['error'] !== null)
+                            <div class="text-danger">{{ $lastSent['error'] }}</div>
+                        @endif
+                    @endif
+                </div>
+                <div class="small mb-1">
+                    <span class="text-body-secondary">Status pengiriman pesan (callback Meta):</span>
+                    @if ($integration['whatsapp']['last_delivery'] === null)
+                        <span class="text-body-secondary">belum ada callback</span>
+                    @else
+                        @php($delivery = $integration['whatsapp']['last_delivery'])
+                        <span class="fw-semibold {{ ($delivery['status'] ?? '') === 'failed' ? 'text-danger' : 'text-success' }}">
+                            {{ strtoupper((string) ($delivery['status'] ?? '-')) }}
+                        </span>
+                        @if (! empty($delivery['at']))
+                            — {{ \Illuminate\Support\Carbon::parse($delivery['at'])->format('d M Y H:i') }}
+                        @endif
+                        @if (! empty($delivery['error']))
+                            <div class="text-danger">{{ $delivery['error'] }}</div>
+                        @endif
+                    @endif
                 </div>
                 <div class="small mb-1">
                     <span class="text-body-secondary">Webhook masuk:</span>
@@ -118,18 +174,6 @@
                         ? \Illuminate\Support\Carbon::parse($integration['whatsapp']['last_webhook_at'])->format('d M Y H:i')
                         : 'belum pernah' }}
                 </div>
-                @if ($integration['whatsapp']['test'] !== null)
-                    <div class="small">
-                        <span class="text-body-secondary">Uji koneksi:</span>
-                        @if ($integration['whatsapp']['test']['ok'])
-                            <span class="text-success fw-semibold">berhasil</span>
-                            — nomor {{ $integration['whatsapp']['test']['display_phone'] ?? '-' }}
-                        @else
-                            <span class="text-danger fw-semibold">gagal</span>
-                            — {{ $integration['whatsapp']['test']['error'] ?? 'tidak diketahui' }}
-                        @endif
-                    </div>
-                @endif
                 @if (! $integration['whatsapp']['configured'])
                     <div class="small mt-1">
                         <span class="text-body-secondary">Variabel <code>.env</code> yang belum diisi:</span>
@@ -138,6 +182,12 @@
                         @endforeach
                     </div>
                 @endif
+                <div class="mt-2">
+                    <button type="button" id="wa-api-status-btn" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-activity me-1"></i> Periksa Status API
+                    </button>
+                </div>
+                <div id="wa-api-status-result" class="small mt-2" style="display: none;"></div>
             </div>
         </div>
 
@@ -606,3 +656,90 @@
     {{ $logs->links() }}
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const btn = document.getElementById('wa-api-status-btn');
+        const out = document.getElementById('wa-api-status-result');
+
+        if (!btn || !out) {
+            return;
+        }
+
+        const esc = (value) => String(value === null || value === undefined ? '-' : value)
+            .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        const when = (iso) => {
+            if (!iso) {
+                return '-';
+            }
+            const d = new Date(iso);
+            return isNaN(d.getTime()) ? esc(iso) : d.toLocaleString('id-ID');
+        };
+
+        btn.addEventListener('click', async function () {
+            btn.disabled = true;
+            out.style.display = 'block';
+            out.innerHTML = '<span class="text-body-secondary">Memeriksa status API WhatsApp…</span>';
+
+            try {
+                const response = await fetch(@json(route('admin.notifications.whatsapp.status')), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (response.status === 429) {
+                    throw new Error('Terlalu banyak permintaan — coba lagi dalam satu menit.');
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Permintaan gagal diterima server.');
+                }
+
+                const conn = data.connection || {};
+                const lastSent = data.last_sent;
+                const delivery = data.last_delivery;
+                const connHtml = conn.ok
+                    ? '<span class="text-success fw-semibold">Berhasil</span> — nomor ' + esc(conn.display_phone || '-')
+                    : '<span class="text-danger fw-semibold">Gagal</span> — ' + esc(conn.error || 'tidak diketahui');
+                const sentHtml = !lastSent
+                    ? 'belum pernah'
+                    : '<span class="fw-semibold ' + (lastSent.status === 'sent' ? 'text-success' : 'text-danger') + '">'
+                        + esc(lastSent.status === 'sent' ? 'Terkirim' : (lastSent.status === 'failed' ? 'Gagal' : lastSent.status))
+                        + '</span> — ' + when(lastSent.at)
+                        + (lastSent.error ? ' <span class="text-danger">' + esc(lastSent.error) + '</span>' : '');
+                const deliveryHtml = !delivery
+                    ? 'belum ada callback'
+                    : '<span class="fw-semibold ' + (delivery.status === 'failed' ? 'text-danger' : 'text-success') + '">'
+                        + esc(String(delivery.status || '-').toUpperCase()) + '</span> — ' + when(delivery.at)
+                        + (delivery.error ? ' <span class="text-danger">' + esc(delivery.error) + '</span>' : '');
+
+                out.innerHTML =
+                    '<div><span class="text-body-secondary">Status kredensial:</span> <span class="fw-semibold '
+                    + (data.configured ? 'text-success' : 'text-danger') + '">'
+                    + (data.configured ? 'Tersedia' : 'Belum Tersedia (' + esc((data.missing || []).join(', ')) + ')')
+                    + '</span></div>'
+                    + '<div><span class="text-body-secondary">Saklar integrasi:</span> <span class="fw-semibold">'
+                    + (data.enabled ? 'aktif' : 'nonaktif') + '</span></div>'
+                    + '<div><span class="text-body-secondary">Nomor penerima:</span> <span class="fw-semibold">'
+                    + esc(data.admin_number || '-') + '</span></div>'
+                    + '<div><span class="text-body-secondary">Koneksi API:</span> ' + connHtml + '</div>'
+                    + '<div><span class="text-body-secondary">Pengiriman terakhir:</span> ' + sentHtml + '</div>'
+                    + '<div><span class="text-body-secondary">Status pengiriman (Meta):</span> ' + deliveryHtml + '</div>'
+                    + '<div><span class="text-body-secondary">Webhook terakhir:</span> ' + when(data.last_webhook_at) + '</div>'
+                    + '<div class="text-body-secondary">Diperiksa pada ' + when(data.checked_at) + '.</div>';
+            } catch (error) {
+                out.innerHTML = '<div class="text-danger">' + esc(error.message || 'Terjadi kesalahan.') + '</div>';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
+</script>
+@endpush

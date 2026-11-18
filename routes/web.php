@@ -244,6 +244,9 @@ Route::middleware('auth')->group(function () {
             Route::post('notifications/connections', [AdminNotificationController::class, 'testConnections'])
                 ->name('notifications.connections')
                 ->middleware('throttle:6,1'); // uji koneksi memanggil API luar (getMe/graph)
+            Route::post('notifications/whatsapp/status', [AdminNotificationController::class, 'whatsappApiStatus'])
+                ->name('notifications.whatsapp.status')
+                ->middleware('throttle:12,1'); // status API memanggil Graph API (baca saja)
         });
     });
 

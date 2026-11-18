@@ -78,7 +78,32 @@ class WebhookController extends Controller
             }
         }
 
-        foreach ($this->extractWhatsAppMessages($request->json()->all()) as $message) {
+        $payload = $request->json()->all();
+
+        foreach ($this->extractWhatsAppStatuses($payload) as $status) {
+            // Meta dapat mengirim ulang callback status yang sama.
+            $dedupeKey = 'chatbot:wa:status:'.$status['id'].':'.$status['status'];
+
+            if (! Cache::add($dedupeKey, 1, now()->addDay())) {
+                continue;
+            }
+
+            // Status pengiriman terakhir disimpan untuk ditampilkan pada
+            // dashboard (tanpa menyimpan isi pesan atau kredensial apa pun).
+            Cache::put(
+                'chatbot.webhook.last_whatsapp_status',
+                $status + ['at' => now()->toIso8601String()],
+                now()->addDays(30)
+            );
+
+            Log::info('webhook.whatsapp.status', [
+                'message_id' => $status['id'],
+                'status' => $status['status'],
+                'error' => $status['error'],
+            ]);
+        }
+
+        foreach ($this->extractWhatsAppMessages($payload) as $message) {
             // Anti-duplikat: Meta dapat mengirim ulang webhook yang sama.
             if (! Cache::add('chatbot:wa:'.$message['id'], 1, now()->addDay())) {
                 continue;
@@ -177,6 +202,45 @@ class WebhookController extends Controller
             ->whereNotNull('code_expires_at')
             ->where('code_expires_at', '>', now())
             ->exists();
+    }
+
+    /**
+     * Ekstrak status pengiriman (sent/delivered/read/failed) dari payload.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<array{id: string, status: string, recipient: string, error: ?string, timestamp: string}>
+     */
+    private function extractWhatsAppStatuses(array $payload): array
+    {
+        $statuses = [];
+
+        foreach ($payload['entry'] ?? [] as $entry) {
+            foreach ($entry['changes'] ?? [] as $change) {
+                foreach ($change['value']['statuses'] ?? [] as $status) {
+                    $id = (string) ($status['id'] ?? '');
+                    $state = (string) ($status['status'] ?? '');
+
+                    if ($id === '' || $state === '') {
+                        continue;
+                    }
+
+                    $errors = $status['errors'] ?? [];
+                    $firstError = is_array($errors) && $errors !== [] ? ($errors[0] ?? null) : null;
+
+                    $statuses[] = [
+                        'id' => $id,
+                        'status' => $state,
+                        'recipient' => (string) ($status['recipient_id'] ?? ''),
+                        'error' => is_array($firstError)
+                            ? mb_substr((string) ($firstError['title'] ?? $firstError['message'] ?? ''), 0, 200)
+                            : null,
+                        'timestamp' => (string) ($status['timestamp'] ?? ''),
+                    ];
+                }
+            }
+        }
+
+        return $statuses;
     }
 
     /**

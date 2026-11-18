@@ -688,7 +688,10 @@ class ChatbotChannelWebhookTest extends TestCase
             ->assertSee('Integrasi Chatbot')
             ->assertSee('/webhooks/telegram')
             ->assertSee('AGUNGATK_bot')
-            ->assertSee('6289***')
+            // Nomor penerima notifikasi admin tampil apa adanya pada panel
+            // konfigurasi (milik admin sendiri); penerima riwayat tetap
+            // tersamarkan (lihat NotificationSettingsTest::test_history_table_masks_recipient).
+            ->assertSee('6289697358716')
             ->assertDontSee('TG-TOKEN-RAHASIA123')
             ->assertDontSee('WEBHOOK-SECRET-RAHASIA456');
     }
@@ -827,5 +830,105 @@ class ChatbotChannelWebhookTest extends TestCase
 
         $this->assertFalse($result['ok']);
         $this->assertStringContainsString('sudah terhubung', (string) ($result['error'] ?? ''));
+    }
+
+    /* =====================================================================
+     | CALLBACK STATUS PENGIRIMAN & PERIKSA STATUS API
+     * ===================================================================*/
+
+    public function test_whatsapp_status_callback_is_recorded_without_chatbot_processing(): void
+    {
+        $this->configureChannels();
+
+        $payload = [
+            'object' => 'whatsapp_business_account',
+            'entry' => [[
+                'id' => 'WABA-1',
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messaging_product' => 'whatsapp',
+                        'metadata' => [
+                            'display_phone_number' => '6281234567890',
+                            'phone_number_id' => '111222333',
+                        ],
+                        'statuses' => [[
+                            'id' => 'wamid.STATUS.UJI1',
+                            'status' => 'delivered',
+                            'recipient_id' => '62881024127186',
+                            'timestamp' => '1795000000',
+                        ]],
+                    ],
+                ]],
+            ]],
+        ];
+
+        $raw = json_encode($payload);
+        $server = [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_X-Hub-Signature-256' => 'sha256='.hash_hmac('sha256', $raw, 'wa-app-secret'),
+        ];
+
+        $this->call('POST', route('webhooks.whatsapp.receive'), [], [], [], $server, $raw)
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $stored = Cache::get('chatbot.webhook.last_whatsapp_status');
+
+        $this->assertIsArray($stored, 'Callback status harus tercatat untuk dashboard.');
+        $this->assertSame('delivered', $stored['status']);
+        $this->assertSame('wamid.STATUS.UJI1', $stored['id']);
+        $this->assertNotNull($stored['at']);
+
+        // Callback status BUKAN pesan masuk — tidak ada balasan chatbot.
+        $this->assertSame(0, $this->replyLogs()->where('channel', 'whatsapp')->count());
+
+        // Callback ganda tidak diproses ulang (anti-duplikat).
+        $this->call('POST', route('webhooks.whatsapp.receive'), [], [], [], $server, $raw)
+            ->assertOk();
+
+        $this->assertSame(0, $this->replyLogs()->where('channel', 'whatsapp')->count());
+    }
+
+    public function test_whatsapp_api_status_endpoint_returns_live_status_json(): void
+    {
+        $this->configureChannels();
+        config(['notifications.admin_phone' => '62881024127186']);
+
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'display_phone_number' => '62881024127186',
+                'verified_name' => 'Agung ATK',
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson(route('admin.notifications.whatsapp.status'));
+
+        $response->assertOk()
+            ->assertJsonPath('configured', true)
+            ->assertJsonPath('missing', [])
+            ->assertJsonPath('enabled', true)
+            ->assertJsonPath('admin_number', '62881024127186')
+            ->assertJsonPath('connection.ok', true)
+            ->assertJsonPath('connection.display_phone', '62881024127186')
+            ->assertJsonPath('message_mode', 'text');
+
+        $this->assertNotNull($response->json('checked_at'));
+        $this->assertArrayHasKey('last_sent', $response->json());
+        $this->assertArrayHasKey('last_delivery', $response->json());
+
+        // Endpoint hanya membaca status — tidak pernah mengirim pesan.
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/messages'));
+    }
+
+    public function test_whatsapp_api_status_endpoint_requires_admin(): void
+    {
+        $this->configureChannels();
+
+        $this->actingAs($this->pelanggan)
+            ->postJson(route('admin.notifications.whatsapp.status'))
+            ->assertForbidden();
     }
 }

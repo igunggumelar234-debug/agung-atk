@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Notifications\NotificationManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,8 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly NotificationManager $notifications) {}
+
     /**
      * Tampilkan halaman formulir login.
      */
@@ -57,6 +60,13 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         ActivityLog::record('auth.login', $user, 'Login ke sistem.');
+
+        // Pemberitahuan keamanan ke admin (jendela anti-duplikat pendek
+        // ditentukan konfigurasi event account.login).
+        $this->notifications->dispatch('account.login', [
+            'user' => $user,
+            'ip' => $request->ip(),
+        ]);
 
         return $this->redirectBasedOnRole($user)
             ->with('success', 'Selamat datang kembali, '.$user->name.'!');

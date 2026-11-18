@@ -8,6 +8,7 @@ use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Notifications\TelegramNotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -374,18 +375,24 @@ class NotificationController extends Controller
         $test = Cache::get('chatbot.connections.test');
         $telegramStatus = $this->notifications->channelStatus('telegram');
         $whatsappStatus = $this->notifications->channelStatus('whatsapp');
+        $delivery = Cache::get('chatbot.webhook.last_whatsapp_status');
 
         return [
             'whatsapp' => [
                 'enabled' => (bool) config('services.whatsapp.enabled'),
                 'configured' => $whatsappStatus['configured'],
                 'missing' => $whatsappStatus['missing'],
-                'admin_number' => self::maskRecipient((string) config('notifications.admin_phone')),
+                // Nomor penerima notifikasi admin ditampilkan apa adanya
+                // (konfigurasi milik admin sendiri, hanya terlihat oleh admin
+                // yang login) — penerima lain pada riwayat tetap tersamarkan.
+                'admin_number' => (string) config('notifications.admin_phone'),
                 'message_mode' => (string) config('services.whatsapp.message_mode'),
                 'webhook_url' => route('webhooks.whatsapp.receive'),
                 'verify_url' => route('webhooks.whatsapp.verify'),
                 'last_webhook_at' => Cache::get('chatbot.webhook.last_whatsapp'),
                 'test' => is_array($test) ? ($test['whatsapp'] ?? null) : null,
+                'last_sent' => $this->latestChannelLog('whatsapp'),
+                'last_delivery' => is_array($delivery) ? $delivery : null,
             ],
             'telegram' => [
                 'enabled' => (bool) config('services.telegram.enabled'),
@@ -400,6 +407,7 @@ class NotificationController extends Controller
                 'webhook_url' => route('webhooks.telegram.receive'),
                 'last_webhook_at' => Cache::get('chatbot.webhook.last_telegram'),
                 'test' => is_array($test) ? ($test['telegram'] ?? null) : null,
+                'last_sent' => $this->latestChannelLog('telegram'),
             ],
             'test_at' => is_array($test) ? ($test['at'] ?? null) : null,
             'last_sent_at' => NotificationLog::query()
@@ -409,5 +417,56 @@ class NotificationController extends Controller
                 ->where('status', ChannelIdentity::STATUS_VERIFIED)
                 ->count(),
         ];
+    }
+
+    /**
+     * Pengiriman terakhir pada satu saluran untuk panel status dashboard.
+     *
+     * @return array{at: ?string, status: ?string, subject: ?string, error: ?string}|null
+     */
+    private function latestChannelLog(string $channel): ?array
+    {
+        $log = NotificationLog::query()
+            ->where('channel', $channel)
+            ->latestFirst()
+            ->first(['status', 'sent_at', 'created_at', 'subject', 'error']);
+
+        if ($log === null) {
+            return null;
+        }
+
+        return [
+            'at' => (string) ($log->sent_at ?? $log->created_at),
+            'status' => (string) $log->status,
+            'subject' => (string) $log->subject,
+            'error' => $log->error !== null ? (string) $log->error : null,
+        ];
+    }
+
+    /**
+     * Periksa Status API WhatsApp (endpoint JSON untuk tombol dashboard).
+     *
+     * Menggabungkan: status kredensial (.env), uji koneksi langsung ke Graph
+     * API (hanya baca — tidak mengirim pesan), pengiriman terakhir, status
+     * pengiriman terakhir dari callback Meta, dan webhook terakhir.
+     */
+    public function whatsappApiStatus(): JsonResponse
+    {
+        $status = $this->notifications->channelStatus('whatsapp');
+
+        return response()->json([
+            'configured' => $status['configured'],
+            'missing' => $status['missing'],
+            'enabled' => (bool) config('services.whatsapp.enabled'),
+            'admin_number' => (string) config('notifications.admin_phone'),
+            'message_mode' => (string) config('services.whatsapp.message_mode'),
+            'connection' => $this->whatsappConnectionTest(),
+            'last_sent' => $this->latestChannelLog('whatsapp'),
+            'last_delivery' => is_array($delivery = Cache::get('chatbot.webhook.last_whatsapp_status'))
+                ? $delivery
+                : null,
+            'last_webhook_at' => Cache::get('chatbot.webhook.last_whatsapp'),
+            'checked_at' => now()->toIso8601String(),
+        ]);
     }
 }
