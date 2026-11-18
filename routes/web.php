@@ -104,8 +104,10 @@ Route::post('/image-search', ImageSearchController::class)
     ->name('image.search');
 
 // Review produk (hanya pelanggan; kelayakan pesanan divalidasi di controller)
+// throttle:10,1 -> moderasi spam review; tanpa batas, akun bisa membanjiri
+// tabel reviews dalam hitungan detik.
 Route::post('/products/{product:slug}/reviews', [ReviewController::class, 'store'])
-    ->middleware(['auth', 'pelanggan'])
+    ->middleware(['auth', 'pelanggan', 'throttle:10,1'])
     ->name('reviews.store');
 
 // Keranjang Belanja (hanya pelanggan yang login)
@@ -124,7 +126,11 @@ Route::middleware(['auth', 'pelanggan'])->group(function () {
 
     // Detail & unggah bukti pembayaran (khusus pelanggan pemilik)
     Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
-    Route::post('/payments/{payment}/proof', [PaymentController::class, 'uploadProof'])->name('payments.proof.upload');
+    // throttle:10,1 -> unggahan file berat; tanpa batas, sesi pelanggan bisa
+    // membanjiri penyimpanan/disk server dengan pengulangan unggah.
+    Route::post('/payments/{payment}/proof', [PaymentController::class, 'uploadProof'])
+        ->middleware('throttle:10,1')
+        ->name('payments.proof.upload');
 });
 
 // Streaming bukti pembayaran: pemilik pesanan ATAU admin (diverifikasi di controller)
@@ -232,7 +238,11 @@ Route::middleware('auth')->group(function () {
             // Laporan & analitik (hanya admin): layar, cetak/PDF, dan export CSV
             Route::prefix('reports')->name('reports.')->group(function () {
                 Route::get('/', [AdminReportController::class, 'index'])->name('index');
-                Route::get('/export', [AdminReportController::class, 'export'])->name('export');
+                // throttle:5,1 -> export CSV memindai laporan penuh; tanpa batas,
+                // permintaan berulang membebani query & bandwidth server.
+                Route::get('/export', [AdminReportController::class, 'export'])
+                    ->middleware('throttle:5,1')
+                    ->name('export');
                 Route::get('/print', [AdminReportController::class, 'printView'])->name('print');
             });
 

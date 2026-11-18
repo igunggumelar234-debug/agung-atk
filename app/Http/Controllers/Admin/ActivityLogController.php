@@ -34,10 +34,13 @@ class ActivityLogController extends Controller
                 $query->where('activity_type', $activityType);
             })
             ->when($dateFrom, function ($query) use ($dateFrom) {
-                $query->whereDate('created_at', '>=', $dateFrom);
+                // Rentang eksplisit (bukan fungsi DATE() pada kolom) agar
+                // index created_at tetap terpakai; batas akhir hari memakai
+                // 23:59:59 agar cakupannya identik dengan whereDate lama.
+                $query->where('created_at', '>=', substr((string) $dateFrom, 0, 10));
             })
             ->when($dateTo, function ($query) use ($dateTo) {
-                $query->whereDate('created_at', '<=', $dateTo);
+                $query->where('created_at', '<=', substr((string) $dateTo, 0, 10).' 23:59:59');
             })
             ->latest()
             ->paginate(20)

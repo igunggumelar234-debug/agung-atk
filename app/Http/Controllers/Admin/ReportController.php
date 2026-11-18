@@ -190,12 +190,14 @@ class ReportController extends Controller
     {
         $query = Order::query();
 
+        // Rentang eksplisit (bukan fungsi DATE() pada kolom) agar index
+        // created_at terpakai; cakupan hari identik dengan whereDate lama.
         if (! empty($filters['start_date'])) {
-            $query->whereDate('created_at', '>=', $filters['start_date']);
+            $query->where('created_at', '>=', substr((string) $filters['start_date'], 0, 10));
         }
 
         if (! empty($filters['end_date'])) {
-            $query->whereDate('created_at', '<=', $filters['end_date']);
+            $query->where('created_at', '<=', substr((string) $filters['end_date'], 0, 10).' 23:59:59');
         }
 
         if (! empty($filters['status'])) {

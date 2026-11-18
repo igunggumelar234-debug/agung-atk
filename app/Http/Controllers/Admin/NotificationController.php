@@ -68,7 +68,11 @@ class NotificationController extends Controller
         $logs = NotificationLog::query()
             ->with('order')
             ->when(filled($filters['date']), function ($query) use ($filters) {
-                $query->whereDate('created_at', $filters['date']);
+                // Rentang eksplisit sepanjang hari (bukan DATE() pada kolom)
+                // agar index created_at terpakai — cakupan identik whereDate.
+                $day = substr((string) $filters['date'], 0, 10);
+                $query->where('created_at', '>=', $day)
+                    ->where('created_at', '<=', $day.' 23:59:59');
             })
             ->when(
                 filled($filters['channel']) && array_key_exists($filters['channel'], $channels),
