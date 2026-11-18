@@ -161,10 +161,21 @@ class ImageSearchTest extends TestCase
         $response->assertOk();
 
         $status = $response->json('status');
-        $this->assertContains($status, ['recognized', 'not_atk', 'uncertain']);
         $this->assertIsString($response->json('message'));
         $this->assertNotSame('', $response->json('message'));
         $this->assertIsArray($response->json('products'));
+
+        if (! $this->datasetReady()) {
+            // Tanpa indeks dataset (mis. di CI yang tidak menyimpan dataset),
+            // mesin jujur melaporkan 'error' dengan pesan ramah dan tanpa
+            // produk karangan — struktur payload tetap divalidasi di atas.
+            $this->assertSame('error', $status);
+            $this->assertSame([], $response->json('products'));
+
+            return;
+        }
+
+        $this->assertContains($status, ['recognized', 'not_atk', 'uncertain']);
 
         if ($status !== 'recognized') {
             // Status non-ATK/ragu: pesan persis sesuai spesifikasi + tanpa produk.
