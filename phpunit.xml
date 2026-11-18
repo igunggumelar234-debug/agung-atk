@@ -57,9 +57,17 @@
         <env name="NOTIFICATION_ADMIN_EMAIL" value="admin-test@agungatk.test"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
-        <env name="DB_URL" value=""/>
+        <!-- Immunitas terhadap config-cache: bila `php artisan optimize` pernah
+             dijalankan (langkah produksi), bootstrap/cache/config.php membekukan
+             DB_CONNECTION=mysql dan menimpa env testing -> suite menyentuh MySQL
+             asli dan migrate:fresh menghapus data dev. Dengan jalur cache config
+             terpisah yang tidak pernah ditulis, suite selalu membaca env di
+             bawah ini. force="true" menjamin env ini menang atas env turunan
+             dari proses induk (mis. `php artisan test` yang membaca .env). -->
+        <env name="APP_CONFIG_CACHE" value="bootstrap/cache/config-phpunit.php"/>
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
