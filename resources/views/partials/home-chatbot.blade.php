@@ -165,6 +165,11 @@
         max-width: 95%;
     }
 
+    .chatbot-bubble-head {
+        font-weight: 700;
+        letter-spacing: .02em;
+    }
+
     .chatbot-typing {
         align-self: flex-start;
         display: inline-flex;
@@ -309,10 +314,24 @@
         function addBubble(text, className) {
             const bubble = document.createElement('div');
             bubble.className = 'chatbot-bubble ' + className;
-            bubble.textContent = text;
+            renderLines(bubble, text);
             messages.appendChild(bubble);
             scrollDown();
             return bubble;
+        }
+
+        // Render balasan terstruktur (header kapital + baris data) sebagai
+        // node teks murni — aman dari injeksi HTML, format daftar tetap rapi.
+        function renderLines(container, text) {
+            const lines = String(text == null ? '' : text).split('\n');
+            lines.forEach(function (line, index) {
+                const row = document.createElement('div');
+                if (index === 0 && /^[A-Z0-9][A-Z0-9 ()&\-:.]{3,}$/.test(line.trim())) {
+                    row.className = 'chatbot-bubble-head';
+                }
+                row.textContent = line === '' ? '\u00A0' : line;
+                container.appendChild(row);
+            });
         }
 
         function addTyping() {

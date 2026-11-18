@@ -182,7 +182,9 @@ class WorkflowKnowledge
         'pengiriman' => '/\b(?:cara|langkah|bagaimana|gimana|proses)\b[\s\S]{0,40}'
             .'(?:pengiriman|mengirim|kirim\s+barang|delivery)\b/i',
         'laporan' => '/\b(?:cara|langkah|bagaimana|gimana)\b[\s\S]{0,40}'
-            .'(?:laporan|report|statistik|penjualan|cetak|export|ekspor|csv|pdf)\b/i',
+            .'(?:laporan|report|statistik|penjualan|cetak|export|ekspor|csv|pdf)\b'
+            .'|\b(?:di\s+mana|dimana|mana\s+(?:saya\s+)?bisa|ke\s+mana)\b[\s\S]{0,40}'
+            .'(?:laporan|report|statistik\s+penjualan)\b/i',
         'notifikasi' => '/\b(?:cara|langkah|bagaimana|gimana)\b[\s\S]{0,45}'
             .'(?:notifikasi|telegram|whatsapp|email\s+otomatis)\b/i',
         'chatbot' => '/\b(?:cara|langkah|bagaimana|gimana)\b[\s\S]{0,40}'

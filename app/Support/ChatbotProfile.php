@@ -111,6 +111,7 @@ class ChatbotProfile
         .'|\b(?:apa\s+yang\s+bisa|bisa\s+apa|dapat\s+apa|apakah\s+bisa|bolehkah)\b'
         .'[\s\S]{0,60}\b(?:admin|anggota|kurir|courier|pelanggan|customer|tamu|guest|pengguna|saya|akun)\b'
         .'|\b(?:fungsi|kegunaan|manfaat)\b[\s\S]{0,10}\b(?:website|aplikasi|sistem|toko|chatbot)\b'
+        .'|\b(?:fungsi|kegunaan|manfaat|guna)\b[\s\S]{0,15}\b(?:menu|fitur|halaman|tombol)\b'
         .'|\b(?:aku|saya|gue|gw)\s+(?:bisa|dapat|boleh)\s+(?:ngapain|ngapain\s+aja|apa\s+aja|apa\s+saja|bisa\s+apa)\b'
         .'|\b(?:bisa|dapat|boleh)\s+ngapain\b/i';
 

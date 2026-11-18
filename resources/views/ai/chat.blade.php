@@ -47,6 +47,7 @@
                     <button type="button" class="btn btn-outline-primary btn-sm suggestion">Cari pulpen untuk menulis</button>
                     <button type="button" class="btn btn-outline-primary btn-sm suggestion">Rekomendasi untuk mengarsip dokumen</button>
                     <button type="button" class="btn btn-outline-primary btn-sm suggestion">Produk apa saja yang tersedia?</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm suggestion">Berapa jumlah seluruh produk?</button>
                 </div>
             </div>
         @endif
@@ -82,6 +83,11 @@
         white-space: pre-line;
         line-height: 1.5;
         word-break: break-word;
+    }
+
+    .msg-head {
+        font-weight: 700;
+        letter-spacing: .02em;
     }
 </style>
 @endpush
@@ -158,13 +164,27 @@
             bubble.className = 'msg-bubble rounded-3 px-3 py-2 shadow-sm '
                 + (role === 'user' ? 'bg-primary text-white' : 'bg-white border');
             bubble.style.maxWidth = '85%';
-            bubble.textContent = text;
+            renderLines(bubble, text, role !== 'user');
 
             wrap.appendChild(bubble);
             box.appendChild(wrap);
             scrollToBottom();
 
             return wrap;
+        }
+
+        // Render balasan terstruktur (header kapital + baris data) sebagai
+        // node teks murni — aman dari injeksi HTML, format daftar tetap rapi.
+        function renderLines(container, text, allowHeader) {
+            const lines = String(text == null ? '' : text).split('\n');
+            lines.forEach(function (line, index) {
+                const row = document.createElement('div');
+                if (allowHeader && index === 0 && /^[A-Z0-9][A-Z0-9 ()&\-:.]{3,}$/.test(line.trim())) {
+                    row.className = 'msg-head';
+                }
+                row.textContent = line === '' ? '\u00A0' : line;
+                container.appendChild(row);
+            });
         }
 
         function showTyping() {
