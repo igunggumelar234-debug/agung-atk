@@ -125,6 +125,67 @@ class WebhookController extends Controller
     }
 
     /**
+     * Pesan masuk dari Fonnte webhook (POST /webhooks/fonnte/{secret}).
+     *
+     * Fonnte TIDAK menandatangani payload — verifikasi memakai secret di
+     * path URL dan bersifat GAGAL-TERTUTUP (403 bila secret belum diatur
+     * atau tidak cocok). Alur pemrosesan memakai pipeline chatbot yang sama
+     * dengan webhook WhatsApp/Telegram (identitas kanal + balasan via job).
+     */
+    public function fonnteReceive(Request $request, string $token): JsonResponse
+    {
+        if (! config('services.whatsapp.enabled')) {
+            return response()->json(['ok' => true, 'ignored' => 'disabled']);
+        }
+
+        $secret = (string) config('services.fonnte.webhook_secret', '');
+
+        // Gagal-tertutup: tanpa secret terkonfigurasi, tidak ada request yang
+        // diproses — mencegah pihak lain menyamar sebagai Fonnte.
+        if ($secret === '' || ! hash_equals($secret, $token)) {
+            Log::warning('webhook.fonnte.secret_invalid');
+
+            return response()->json(['ok' => false, 'error' => 'Secret webhook tidak valid.'], 403);
+        }
+
+        $payload = $request->json()->all();
+
+        Cache::put('chatbot.webhook.last_fonnte', now()->toIso8601String(), now()->addDays(30));
+
+        $sender = trim((string) ($payload['sender'] ?? ''));
+        $text = trim((string) ($payload['message'] ?? ''));
+        $member = trim((string) ($payload['member'] ?? ''));
+
+        if ($sender === '' || $text === '') {
+            return response()->json(['ok' => true, 'ignored' => 'no_text_message']);
+        }
+
+        // Pesan grup (ada pengirim anggota) tidak diproses — chatbot hanya
+        // melayani pesan langsung agar konteks akun tetap per-pengguna.
+        if ($member !== '') {
+            return response()->json(['ok' => true, 'ignored' => 'group_message']);
+        }
+
+        // Anti-duplikat: Fonnte tidak menyertakan id pesan unik, sehingga
+        // kunci dibuat dari pengirim + timestamp + isi (retry identik tertahan).
+        $dedupeKey = 'chatbot:fn:'.sha1($sender.'|'.($payload['timestamp'] ?? '').'|'.$text);
+
+        if (! Cache::add($dedupeKey, 1, now()->addDay())) {
+            return response()->json(['ok' => true, 'ignored' => 'duplicate']);
+        }
+
+        $identifier = WhatsAppNotificationService::normalizeInternational($sender) ?? $sender;
+
+        $this->chat->handle(
+            ChannelIdentity::CHANNEL_WHATSAPP,
+            $identifier,
+            $text,
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * Pesan masuk dari Telegram Bot API (POST webhook).
      */
     public function telegramReceive(Request $request): JsonResponse

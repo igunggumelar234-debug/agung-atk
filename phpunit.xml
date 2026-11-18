@@ -38,6 +38,10 @@
         <env name="WHATSAPP_ACCESS_TOKEN" value=""/>
         <env name="WHATSAPP_PHONE_NUMBER_ID" value=""/>
         <env name="WHATSAPP_ADMIN_PHONE" value=""/>
+        <!-- Provider WhatsApp pada suite test selalu Meta (jalur lama stabil);
+             tes Fonnte mengaktifkan provider lewat config()->set() sendiri. -->
+        <env name="WHATSAPP_PROVIDER" value="meta"/>
+        <env name="FONNTE_API_TOKEN" value=""/>
         <!-- Integrasi chatbot (PROMPT 9): isolasi dari .env live. Saklar kanal
              = true agar perilaku tidak berubah dari sebelum gerbang
              WHATSAPP_ENABLED / TELEGRAM_ENABLED ada; kredensial webhook,

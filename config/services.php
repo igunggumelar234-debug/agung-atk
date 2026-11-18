@@ -60,12 +60,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | WhatsApp Business Cloud API (Notifikasi & Chatbot)
+    | Fonnte WhatsApp Gateway (Notifikasi & Chatbot) — Provider Utama
+    |--------------------------------------------------------------------------
+    | Dokumentasi resmi: https://docs.fonnte.com/
+    | - POST {url}/send        : kirim pesan (header Authorization: TOKEN,
+    |                            tanpa prefix "Bearer", body target+message).
+    | - POST {url}/get-devices : status perangkat WhatsApp terhubung.
+    |
+    | token    : API token Fonnte (FONNTE_API_TOKEN) — HANYA di .env.
+    | url      : FONNTE_API_URL (default https://api.fonnte.com).
+    | timeout  : detik timeout HTTP (FONNTE_TIMEOUT, default 15).
+    */
+    'fonnte' => [
+        'url' => env('FONNTE_API_URL', 'https://api.fonnte.com'),
+        'token' => env('FONNTE_API_TOKEN'),
+        'timeout' => (int) env('FONNTE_TIMEOUT', 15),
+        // Secret di path webhook masuk (/webhooks/fonnte/{token}) — Fonnte
+        // tidak menandatangani payload, sehingga verifikasi GAGAL-TERTUTUP:
+        // bila kosong, seluruh request webhook Fonnte ditolak (403).
+        'webhook_secret' => env('FONNTE_WEBHOOK_SECRET'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | WhatsApp Business Cloud API (Notifikasi & Chatbot) — Provider Cadangan
     |--------------------------------------------------------------------------
     | Semua kredensial diisi melalui .env. Pesan yang memerlukan template
     | harus memakai template yang sudah disetujui di Meta Business Suite.
     | message_mode: 'text' (percakapan bebas) atau 'template'.
     |
+    | provider  : 'fonnte' (default produksi, lihat blok Fonnte di atas) atau
+    |             'meta' (WhatsApp Business Cloud API). Mengontrol service
+    |             mana yang dipakai WhatsAppNotificationService.
     | enabled     : saklar integrasi WhatsApp (WHATSAPP_ENABLED).
     | verify_token: token verifikasi webhook GET dari Meta (WHATSAPP_VERIFY_TOKEN).
     | app_secret  : app secret Meta untuk validasi header
@@ -75,6 +101,7 @@ return [
     | bukan nomor admin di bawah ini.
     */
     'whatsapp' => [
+        'provider' => env('WHATSAPP_PROVIDER', 'meta'),
         // WHATSAPP_ACCESS_TOKEN adalah nama resmi Meta; WHATSAPP_API_KEY
         // didukung sebagai alias untuk konfigurasi yang menyebutnya "API Key".
         'access_token' => env('WHATSAPP_ACCESS_TOKEN') ?: env('WHATSAPP_API_KEY'),

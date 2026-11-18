@@ -9,9 +9,13 @@ use RuntimeException;
 class WhatsAppNotificationService
 {
     /**
-     * Kirim pesan notifikasi WhatsApp melalui WhatsApp Business Cloud API resmi.
+     * Kirim pesan notifikasi WhatsApp sesuai provider aktif.
      *
-     * Mode pesan (WHATSAPP_MESSAGE_MODE):
+     * WHATSAPP_PROVIDER (config services.whatsapp.provider):
+     * - 'fonnte' -> FonnteService (gateway Fonnte; provider utama).
+     * - 'meta'   -> WhatsApp Business Cloud API resmi (provider cadangan).
+     *
+     * Mode pesan Meta (WHATSAPP_MESSAGE_MODE):
      * - 'text'     -> pesan teks bebas (percakapan yang sudah terbuka / uji coba).
      * - 'template' -> template pesan yang sudah disetujui Meta (wajib untuk
      *                 memulai percakapan baru ke pengguna). Baris isi pesan
@@ -22,6 +26,12 @@ class WhatsAppNotificationService
      */
     public function send(string $to, string $text): void
     {
+        if (config('services.whatsapp.provider') === 'fonnte') {
+            $this->sendViaFonnte($to, $text);
+
+            return;
+        }
+
         $token = config('services.whatsapp.access_token');
         $phoneNumberId = config('services.whatsapp.phone_number_id');
 
@@ -65,6 +75,22 @@ class WhatsAppNotificationService
             // Sanitasi: API key/token tidak pernah boleh muncul di pesan
             // exception (yang selanjutnya tercatat pada log & dashboard).
             throw new RuntimeException($this->redactSecret($e->getMessage(), $token), 0, $e);
+        }
+    }
+
+    /**
+     * Kirim pesan via Fonnte — kontrak identik dengan jalur Meta
+     * (melempar RuntimeException berisi alasan tanpa membocorkan token).
+     *
+     * @throws RuntimeException bila token kosong, nomor tidak valid, atau
+     *                          Fonnte menolak/menggagalkan pengiriman.
+     */
+    private function sendViaFonnte(string $to, string $text): void
+    {
+        $result = app(FonnteService::class)->send($to, $text);
+
+        if (! $result['ok']) {
+            throw new RuntimeException($result['error'] ?? 'Fonnte gagal mengirim pesan.');
         }
     }
 

@@ -101,6 +101,12 @@
                     @endif
                 </div>
                 <div class="small mb-1">
+                    <span class="text-body-secondary">Provider:</span>
+                    <span class="fw-semibold">
+                        {{ $integration['whatsapp']['provider'] === 'fonnte' ? 'Fonnte WhatsApp Gateway' : 'Meta WhatsApp Cloud API' }}
+                    </span>
+                </div>
+                <div class="small mb-1">
                     <span class="text-body-secondary">Status konfigurasi:</span>
                     <span class="fw-semibold {{ $integration['whatsapp']['configured'] ? 'text-success' : 'text-warning-emphasis' }}">
                         {{ $integration['whatsapp']['configured'] ? 'Terkonfigurasi' : 'Belum Lengkap' }}
@@ -168,6 +174,17 @@
                     <span class="text-body-secondary">Webhook masuk:</span>
                     <code>{{ $integration['whatsapp']['webhook_url'] }}</code>
                 </div>
+                @if ($integration['whatsapp']['provider'] === 'fonnte')
+                    <div class="small mb-1">
+                        <span class="text-body-secondary">Webhook Fonnte (tempel ke dashboard Fonnte):</span>
+                        @if ($integration['whatsapp']['fonnte_webhook_url'] !== null)
+                            <code class="d-block text-break">{{ $integration['whatsapp']['fonnte_webhook_url'] }}</code>
+                            <span class="text-body-secondary">Wajib HTTPS publik pada produksi (atur APP_URL domain Anda).</span>
+                        @else
+                            <span class="text-warning-emphasis">FONNTE_WEBHOOK_SECRET belum diisi.</span>
+                        @endif
+                    </div>
+                @endif
                 <div class="small mb-1">
                     <span class="text-body-secondary">Pesan webhook terakhir:</span>
                     {{ $integration['whatsapp']['last_webhook_at'] !== null
@@ -186,8 +203,17 @@
                     <button type="button" id="wa-api-status-btn" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-activity me-1"></i> Periksa Status API
                     </button>
+                    @if ($integration['whatsapp']['provider'] === 'fonnte')
+                        <button type="button" id="fonnte-device-btn" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-phone me-1"></i> Periksa Perangkat Fonnte
+                        </button>
+                        <button type="button" id="fonnte-test-btn" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-send me-1"></i> Kirim Pesan Percobaan
+                        </button>
+                    @endif
                 </div>
                 <div id="wa-api-status-result" class="small mt-2" style="display: none;"></div>
+                <div id="fonnte-result" class="small mt-2" style="display: none;"></div>
             </div>
         </div>
 
@@ -740,6 +766,98 @@
                 btn.disabled = false;
             }
         });
+
+        // Tombol Fonnte: status perangkat & kirim pesan percobaan (backend nyata).
+        const fonnteBtn = document.getElementById('fonnte-device-btn');
+        const fonnteTestBtn = document.getElementById('fonnte-test-btn');
+        const fonnteOut = document.getElementById('fonnte-result');
+
+        const postJson = async (url, body) => {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: body ? JSON.stringify(body) : undefined,
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.status === 429) {
+                throw new Error('Terlalu banyak permintaan — coba lagi dalam satu menit.');
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || data.message || 'Permintaan gagal diterima server.');
+            }
+
+            return data;
+        };
+
+        const showFonnte = (html) => {
+            if (fonnteOut) {
+                fonnteOut.style.display = 'block';
+                fonnteOut.innerHTML = html;
+            }
+        };
+
+        if (fonnteBtn) {
+            fonnteBtn.addEventListener('click', async function () {
+                fonnteBtn.disabled = true;
+                showFonnte('<span class="text-body-secondary">Memeriksa perangkat Fonnte…</span>');
+
+                try {
+                    const data = await postJson(@json(route('admin.fonnte.device')));
+                    const deviceLine = data.device
+                        ? esc(data.device) + ' — ' + esc(data.device_status || '-')
+                        : 'tidak ada perangkat terdaftar';
+                    showFonnte(
+                        '<div><span class="text-body-secondary">Perangkat:</span> <span class="fw-semibold">'
+                        + deviceLine + '</span></div>'
+                        + '<div><span class="text-body-secondary">Terhubung:</span> <span class="fw-semibold '
+                        + (data.connected > 0 ? 'text-success' : 'text-danger') + '">'
+                        + esc(data.connected) + ' / ' + esc(data.devices) + ' perangkat</span></div>'
+                        + '<div><span class="text-body-secondary">Nama / Paket:</span> '
+                        + esc(data.name || '-') + ' / ' + esc(data.package || '-') + '</div>'
+                        + '<div><span class="text-body-secondary">Kuota tersisa:</span> '
+                        + esc(data.quota || '-') + '</div>'
+                        + '<div><span class="text-body-secondary">Pesan terkirim:</span> '
+                        + esc(data.messages ?? 0) + '</div>'
+                        + '<div class="text-body-secondary">Diperiksa pada ' + when(data.checked_at) + '.</div>'
+                    );
+                } catch (error) {
+                    showFonnte('<div class="text-danger">' + esc(error.message || 'Terjadi kesalahan.') + '</div>');
+                } finally {
+                    fonnteBtn.disabled = false;
+                }
+            });
+        }
+
+        if (fonnteTestBtn) {
+            fonnteTestBtn.addEventListener('click', async function () {
+                fonnteTestBtn.disabled = true;
+                showFonnte('<span class="text-body-secondary">Mengirim pesan percobaan ke nomor admin…</span>');
+
+                try {
+                    const data = await postJson(@json(route('admin.fonnte.test')), {});
+                    showFonnte(
+                        '<div><span class="text-body-secondary">Hasil pengiriman:</span> <span class="fw-semibold '
+                        + (data.ok ? 'text-success' : 'text-danger') + '">'
+                        + (data.ok ? 'Terkirim' : 'Gagal') + '</span></div>'
+                        + '<div><span class="text-body-secondary">Penerima:</span> '
+                        + esc(data.recipient || '-') + '</div>'
+                        + (data.sent_at ? '<div><span class="text-body-secondary">Waktu:</span> ' + when(data.sent_at) + '</div>' : '')
+                        + (data.error ? '<div class="text-danger">' + esc(data.error) + '</div>' : '')
+                    );
+                } catch (error) {
+                    showFonnte('<div class="text-danger">' + esc(error.message || 'Terjadi kesalahan.') + '</div>');
+                } finally {
+                    fonnteTestBtn.disabled = false;
+                }
+            });
+        }
     })();
 </script>
 @endpush

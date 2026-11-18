@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ChannelIdentity;
 use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
+use App\Services\Notifications\FonnteService;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Notifications\TelegramNotificationService;
 use Illuminate\Http\JsonResponse;
@@ -294,18 +295,45 @@ class NotificationController extends Controller
     }
 
     /**
-     * Uji koneksi WhatsApp Cloud API lewat baca data nomor (bukan pengiriman).
+     * Uji koneksi WhatsApp (baca status perangkat/nomor — bukan pengiriman).
      *
-     * @return array{ok: bool, display_phone?: string, error?: string}
+     * Mengikuti provider aktif (WHATSAPP_PROVIDER):
+     * - 'fonnte' -> FonnteService::device() ke api.fonnte.com/device.
+     * - 'meta'   -> Graph API Meta (baca data nomor pengirim).
+     *
+     * @return array{ok: bool, display_phone?: string, provider?: string, connected?: int, error?: string}
      */
     private function whatsappConnectionTest(): array
     {
         $status = $this->notifications->channelStatus('whatsapp');
+        $provider = (string) config('services.whatsapp.provider', 'meta');
 
         if (! $status['configured']) {
             return [
                 'ok' => false,
+                'provider' => $provider,
                 'error' => 'konfigurasi belum lengkap ('.implode(', ', $status['missing']).')',
+            ];
+        }
+
+        if ($provider === 'fonnte') {
+            $device = app(FonnteService::class)->device();
+
+            if (! $device['ok']) {
+                return [
+                    'ok' => false,
+                    'provider' => $provider,
+                    'error' => (string) ($device['error'] ?? 'gagal memeriksa perangkat Fonnte'),
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'provider' => $provider,
+                'display_phone' => (string) ($device['device'] ?? '-'),
+                'connected' => $device['connected'],
+                'device_status' => $device['device_status'],
+                'quota' => $device['quota'],
             ];
         }
 
@@ -321,11 +349,13 @@ class NotificationController extends Controller
 
             return [
                 'ok' => true,
+                'provider' => $provider,
                 'display_phone' => (string) ($response->json('display_phone_number') ?? $phoneNumberId),
             ];
         } catch (\Throwable $e) {
             return [
                 'ok' => false,
+                'provider' => $provider,
                 'error' => mb_substr($e->getMessage(), 0, 200),
             ];
         }
@@ -382,6 +412,7 @@ class NotificationController extends Controller
                 'enabled' => (bool) config('services.whatsapp.enabled'),
                 'configured' => $whatsappStatus['configured'],
                 'missing' => $whatsappStatus['missing'],
+                'provider' => (string) config('services.whatsapp.provider', 'meta'),
                 // Nomor penerima notifikasi admin ditampilkan apa adanya
                 // (konfigurasi milik admin sendiri, hanya terlihat oleh admin
                 // yang login) — penerima lain pada riwayat tetap tersamarkan.
@@ -389,6 +420,14 @@ class NotificationController extends Controller
                 'message_mode' => (string) config('services.whatsapp.message_mode'),
                 'webhook_url' => route('webhooks.whatsapp.receive'),
                 'verify_url' => route('webhooks.whatsapp.verify'),
+                // URL webhook Fonnte (secret di path) — hanya untuk provider
+                // fonnte; dipakai admin saat mengatur Webhook URL di dashboard
+                // Fonnte. Di produksi dibangun dari APP_URL (HTTPS publik).
+                'fonnte_webhook_url' => filled(config('services.fonnte.webhook_secret'))
+                    ? route('webhooks.fonnte.receive', [
+                        'token' => (string) config('services.fonnte.webhook_secret'),
+                    ])
+                    : null,
                 'last_webhook_at' => Cache::get('chatbot.webhook.last_whatsapp'),
                 'test' => is_array($test) ? ($test['whatsapp'] ?? null) : null,
                 'last_sent' => $this->latestChannelLog('whatsapp'),
@@ -457,6 +496,7 @@ class NotificationController extends Controller
         return response()->json([
             'configured' => $status['configured'],
             'missing' => $status['missing'],
+            'provider' => (string) config('services.whatsapp.provider', 'meta'),
             'enabled' => (bool) config('services.whatsapp.enabled'),
             'admin_number' => (string) config('notifications.admin_phone'),
             'message_mode' => (string) config('services.whatsapp.message_mode'),

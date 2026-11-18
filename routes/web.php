@@ -4,6 +4,7 @@ use App\Http\Controllers\AddressController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CourierController as AdminCourierController;
+use App\Http\Controllers\Admin\FonnteController;
 use App\Http\Controllers\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
@@ -83,6 +84,10 @@ Route::middleware('throttle:60,1')->group(function (): void {
         ->name('webhooks.whatsapp.receive');
     Route::post('/webhooks/telegram', [WebhookController::class, 'telegramReceive'])
         ->name('webhooks.telegram.receive');
+    // Webhook Fonnte: secret berada di path (Fonnte tidak menandatangani
+    // payload) — diverifikasi gagal-tertutup oleh controller.
+    Route::post('/webhooks/fonnte/{token}', [WebhookController::class, 'fonnteReceive'])
+        ->name('webhooks.fonnte.receive');
 });
 
 // Katalog Produk (publik: tamu & semua role)
@@ -247,6 +252,15 @@ Route::middleware('auth')->group(function () {
             Route::post('notifications/whatsapp/status', [AdminNotificationController::class, 'whatsappApiStatus'])
                 ->name('notifications.whatsapp.status')
                 ->middleware('throttle:12,1'); // status API memanggil Graph API (baca saja)
+
+            // Integrasi WhatsApp Fonnte (provider utama): status perangkat
+            // & uji kirim — semuanya memanggil backend/service nyata.
+            Route::post('fonnte/device', [FonnteController::class, 'device'])
+                ->name('fonnte.device')
+                ->middleware('throttle:6,1'); // membaca get-devices Fonnte
+            Route::post('fonnte/test', [FonnteController::class, 'sendTest'])
+                ->name('fonnte.test')
+                ->middleware('throttle:5,1'); // uji kirim pesan nyata ke nomor admin
         });
     });
 

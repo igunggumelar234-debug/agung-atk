@@ -582,11 +582,27 @@ class NotificationManager
     /**
      * Variabel .env yang belum diisi untuk saluran WhatsApp.
      *
+     * Pemeriksaan mengikuti provider aktif (WHATSAPP_PROVIDER):
+     * - 'fonnte' -> FONNTE_API_TOKEN + WHATSAPP_ADMIN_PHONE.
+     * - 'meta'   -> kredensial Cloud API Meta + WHATSAPP_ADMIN_PHONE.
+     *
      * @return list<string>
      */
     private function missingWhatsApp(): array
     {
         $missing = [];
+
+        if (config('services.whatsapp.provider') === 'fonnte') {
+            if (blank(config('services.fonnte.token'))) {
+                $missing[] = 'FONNTE_API_TOKEN';
+            }
+
+            if (blank(config('notifications.admin_phone'))) {
+                $missing[] = 'WHATSAPP_ADMIN_PHONE';
+            }
+
+            return $missing;
+        }
 
         if (blank(config('services.whatsapp.access_token'))) {
             $missing[] = 'WHATSAPP_ACCESS_TOKEN';
