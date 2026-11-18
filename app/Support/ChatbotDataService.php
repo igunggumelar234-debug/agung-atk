@@ -156,6 +156,13 @@ class ChatbotDataService
             return 'shipment_customer';
         }
 
+        // 3b2. Peringkat transaksi pelanggan ("pelanggan dengan transaksi
+        //      terbanyak") — spesifik, dihitung sebelum hitungan/daftar
+        //      agar tidak salah tertangkap intent pelanggan umum.
+        if ($this->matchesTopCustomer($lower)) {
+            return 'top_customer';
+        }
+
         // 3c. Informasi akun pelanggan: hitung jumlah → daftar → pencarian
         //     nama/username. Otorisasi per role ditegakkan saat jawaban
         //     disusun; deteksi di sini hanya memetakan maksud pesan.
@@ -169,6 +176,16 @@ class ChatbotDataService
 
         if ($this->matchesCustomerSearch($lower)) {
             return 'customer_search';
+        }
+
+        // 4a. Stok terbanyak & produk terbaru — diprioritaskan sebelum pola
+        //     "stok menipis" dan hitungan jumlah produk.
+        if ($this->matchesTopStock($lower)) {
+            return 'top_stock';
+        }
+
+        if ($this->matchesNewestProducts($lower)) {
+            return 'newest_products';
         }
 
         // 4. Stok menipis (sebelum jumlah produk: "berapa produk stok hampir habis").
@@ -187,6 +204,26 @@ class ChatbotDataService
             return 'best_selling';
         }
 
+        // 5b. Intent data baru (Bagian 4 MASTER): pengguna (per role &
+        //     terbaru), transaksi belum dibayar, serta pesanan terbaru —
+        //     diprioritaskan sebelum hitungan pendapatan/pesanan umum agar
+        //     tidak tertangkap intent yang lebih luas.
+        if ($this->matchesUsersByRole($lower)) {
+            return 'users_by_role';
+        }
+
+        if ($this->matchesNewestUsers($lower)) {
+            return 'newest_users';
+        }
+
+        if (! $this->isPossessive($lower) && $this->matchesPendingPayments($lower)) {
+            return 'pending_payments';
+        }
+
+        if (! $this->isPossessive($lower) && $this->matchesNewestOrders($lower)) {
+            return 'newest_orders';
+        }
+
         // 6. Pendapatan/transaksi dalam rentang waktu.
         if ($this->matchesRevenue($lower)) {
             return 'revenue';
@@ -197,10 +234,12 @@ class ChatbotDataService
             return 'orders_count';
         }
 
-        // 8. Jumlah produk di katalog (termasuk singkatan sehari-hari: brp, byk, jml).
+        // 8. Jumlah produk di katalog (termasuk singkatan sehari-hari: brp,
+        //    byk, jml — dan penegas "seluruh/semua produk").
         if (preg_match(
             '/\b(?:ada\s+(?:berapa(?:kah)?|brp)|(?:berapa(?:kah)?|brp|jumlah|jml|jmlh|total|banyak(?:nya)?|byk))\s+'
-            .'(?:jumlah\s+|jml\s+|jmlh\s+|banyak\s+|byk\s+|jenis\s+|total\s+)*(?:produk|barang|item)\b/i',
+            .'(?:jumlah\s+|jml\s+|jmlh\s+|banyak\s+|byk\s+|jenis\s+|total\s+|'
+            .'seluruh\s+|semua\s+|keseluruhan\s+)*(?:produk|barang|item)\b/i',
             $lower
         ) === 1) {
             return 'product_count';
@@ -223,6 +262,13 @@ class ChatbotDataService
             'customer_count' => $this->customerCountReply($user),
             'customer_list' => $this->customerListReply($user),
             'customer_search' => $this->customerSearchReply($lower, $user),
+            'top_customer' => $this->topCustomerReply($user),
+            'top_stock' => $this->topStockReply(),
+            'newest_products' => $this->newestProductsReply(),
+            'users_by_role' => $this->isStaff($user) ? $this->usersByRoleReply() : $this->staffOnlyReply(),
+            'newest_users' => $this->isAdmin($user) ? $this->newestUsersReply() : self::ACCOUNT_DENIED_REPLY,
+            'pending_payments' => $this->isStaff($user) ? $this->pendingPaymentsReply($lower) : $this->staffOnlyReply(),
+            'newest_orders' => $this->isStaff($user) ? $this->newestOrdersReply() : $this->staffOnlyReply(),
             'low_stock' => $this->lowStockReply(),
             'best_selling' => $this->bestSellingReply(),
             'revenue' => $this->isStaff($user) ? $this->revenueReply($lower) : $this->staffOnlyReply(),
@@ -318,6 +364,58 @@ class ChatbotDataService
         return implode("\n", $lines);
     }
 
+    private function topStockReply(): string
+    {
+        $rows = Product::query()
+            ->where('is_active', true)
+            ->orderByDesc('stock')
+            ->take(self::MAX_LIST)
+            ->get(['name', 'stock', 'unit']);
+
+        if ($rows->isEmpty()) {
+            return 'Katalog saat ini tidak memiliki produk aktif yang bisa dibandingkan stoknya.';
+        }
+
+        $lines = ['Produk dengan stok terbanyak (produk aktif, dihitung langsung dari database):'];
+
+        foreach ($rows->values() as $index => $product) {
+            $lines[] = ($index + 1).'. '.$product->name
+                .' — stok '.(int) $product->stock.' '.($product->unit ?: 'pcs');
+        }
+
+        $lines[] = 'Stok berubah mengikuti penjualan & restok — angka ini dihitung ulang setiap kali Anda bertanya.';
+
+        return implode("\n", $lines);
+    }
+
+    private function newestProductsReply(): string
+    {
+        $rows = Product::query()
+            ->with('category:id,name')
+            ->latest('id')
+            ->take(self::MAX_LIST)
+            ->get(['id', 'category_id', 'name', 'price', 'stock', 'is_active']);
+
+        if ($rows->isEmpty()) {
+            return 'Katalog Agung ATK saat ini belum memiliki produk tercatat.';
+        }
+
+        $total = Product::count();
+        $lines = ['Produk terbaru di katalog (menampilkan '.$rows->count().' dari '.$total.' produk):'];
+
+        foreach ($rows->values() as $index => $product) {
+            $lines[] = ($index + 1).'. '.$product->name
+                .' — Rp '.number_format((float) $product->price, 0, ',', '.')
+                .' — stok '.(int) $product->stock
+                .' — '.($product->is_active ? 'aktif' : 'nonaktif')
+                .($product->category?->name !== null ? ' — kategori '.$product->category->name : '');
+        }
+
+        $lines[] = 'Katalog lengkap dengan gambar ada di halaman Katalog.';
+
+        return implode("\n", $lines);
+    }
+
     /* =====================================================================
      | ANGKA OPERASIONAL (STAF: admin & anggota saja)
      * ===================================================================*/
@@ -373,6 +471,127 @@ class ChatbotDataService
             'Catatan: pesanan pending & dibatalkan tidak dihitung; angka dihitung '
                 .'langsung dari database (read-only) — bukan perkiraan.',
         ]);
+    }
+
+    /**
+     * "Berapa transaksi yang belum dibayar?" — pesanan berstatus pending,
+     * dipecah antara yang sudah mengunggah bukti (menunggu verifikasi)
+     * dan yang sama sekali belum ada bukti pembayaran.
+     */
+    private function pendingPaymentsReply(string $lower): string
+    {
+        [$start, $end, $label] = $this->resolveRange($lower, null, 'sepanjang waktu');
+
+        $query = Order::query()->where('status', 'pending');
+
+        if ($start !== null) {
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+
+        $count = (clone $query)->count();
+
+        if ($count === 0) {
+            return 'Tidak ada pesanan berstatus pending (belum dibayar) pada rentang '.$label.'.';
+        }
+
+        $withProof = (clone $query)->whereHas('payment')->count();
+
+        return implode("\n", [
+            'Pesanan belum dibayar (status pending) '.$label.': '.$count.' pesanan.',
+            'Sudah mengunggah bukti pembayaran (menunggu verifikasi admin): '.$withProof.' pesanan.',
+            'Belum ada unggahan bukti: '.($count - $withProof).' pesanan.',
+            'Angka dihitung langsung dari database (read-only); verifikasi pembayaran '
+                .'dilakukan admin lewat menu Pembayaran — bukan lewat chat.',
+        ]);
+    }
+
+    /**
+     * "Transaksi/pesanan terbaru apa?" — daftar pesanan terakhir masuk
+     * (bukan milik sendiri; itu jalur pesanan saya).
+     */
+    private function newestOrdersReply(): string
+    {
+        $orders = Order::with('user:id,name')
+            ->latest('id')
+            ->take(self::MAX_LIST)
+            ->get(['id', 'order_number', 'user_id', 'status', 'grand_total', 'created_at']);
+
+        if ($orders->isEmpty()) {
+            return 'Belum ada pesanan tercatat di sistem Agung ATK.';
+        }
+
+        $total = Order::count();
+        $lines = ['Pesanan terbaru masuk (menampilkan '.$orders->count().' dari '.$total.' pesanan):'];
+
+        foreach ($orders->values() as $index => $order) {
+            $lines[] = ($index + 1).'. '.$order->order_number
+                .' — '.($order->user?->name ?? '-')
+                .' — status '.$order->status
+                .' — Rp '.number_format((float) $order->grand_total, 0, ',', '.')
+                .' — '.($order->created_at?->format('d M Y H:i') ?? '-').' WIB';
+        }
+
+        $lines[] = 'Rincian & pembaruan status ada di halaman Pesanan (dashboard).';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "Berapa jumlah pengguna berdasarkan role?" — agregat per peran
+     * (tanpa menampilkan nama/email akun per satu).
+     */
+    private function usersByRoleReply(): string
+    {
+        $total = User::count();
+
+        if ($total === 0) {
+            return 'Belum ada akun pengguna tercatat di sistem.';
+        }
+
+        $byRole = User::query()
+            ->join('roles', 'roles.id', '=', 'users.role_id')
+            ->groupBy('roles.name')
+            ->selectRaw('roles.name as role_name, COUNT(*) as total')
+            ->orderByDesc('total')
+            ->pluck('total', 'role_name');
+
+        $lines = ['Jumlah pengguna terdaftar: '.$total.' akun.'];
+        $lines[] = 'Per peran: '.$byRole
+            ->map(fn ($count, string $role) => $role.' ('.$count.')')
+            ->implode(', ').'.';
+        $lines[] = 'Rincian akun ada di menu Pengguna (dashboard admin).';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "Siapa pengguna terbaru?" — daftar akun terakhir terdaftar (admin
+     * saja; menampilkan nama, peran, status, waktu — tanpa email/HP).
+     */
+    private function newestUsersReply(): string
+    {
+        $users = User::with('role:id,name')
+            ->latest('id')
+            ->take(self::MAX_LIST)
+            ->get(['id', 'name', 'role_id', 'is_active', 'created_at']);
+
+        if ($users->isEmpty()) {
+            return 'Belum ada akun pengguna tercatat di sistem.';
+        }
+
+        $total = User::count();
+        $lines = ['Pengguna terbaru terdaftar (menampilkan '.$users->count().' dari '.$total.' akun):'];
+
+        foreach ($users->values() as $index => $account) {
+            $lines[] = ($index + 1).'. '.$account->name
+                .' — peran '.($account->role?->name ?? '-')
+                .' — '.((bool) $account->is_active ? 'aktif' : 'nonaktif')
+                .' — '.($account->created_at?->format('d M Y H:i') ?? '-').' WIB';
+        }
+
+        $lines[] = 'Pengaturan akun (aktif/nonaktif & peran) ada di menu Pengguna.';
+
+        return implode("\n", $lines);
     }
 
     /* =====================================================================
@@ -788,6 +1007,21 @@ class ChatbotDataService
     }
 
     /**
+     * "Pelanggan dengan transaksi terbanyak?" — peringkat transaksi,
+     * dipisah dari hitungan jumlah & daftar alfabetis pelanggan.
+     */
+    private function matchesTopCustomer(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:pelanggan|customer)\b[\s\S]{0,40}\b(?:terbanyak|paling\s+banyak|paling\s+sering)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:terbanyak|paling\s+banyak|paling\s+sering)\b[\s\S]{0,40}\b(?:pelanggan|customer)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
      * Ambil kata kunci nama/username dari pesan pencarian. Hanya kata yang
      * tersisa setelah membuang kata penghubung — dipakai sebagai parameter
      * LIKE terikat (tanpa SQL bebas; wildcard pengguna di-escape).
@@ -821,6 +1055,60 @@ class ChatbotDataService
         $keyword = (string) preg_replace('/\s+/', ' ', $keyword);
 
         return trim($keyword);
+    }
+
+    /**
+     * "Pelanggan dengan transaksi terbanyak?" — peringkat jumlah pesanan
+     * per pelanggan (agregat read-only), dengan cakupan izin yang sama
+     * seperti hitungan/daftar pelanggan.
+     */
+    private function topCustomerReply(?User $user): string
+    {
+        $scope = $this->customerAccountScope($user);
+
+        if ($scope === 'guest') {
+            return self::GUEST_ACCOUNT_REPLY;
+        }
+
+        if ($scope === 'none') {
+            return self::ACCOUNT_DENIED_REPLY;
+        }
+
+        if ($scope === 'search') {
+            return 'Peringkat transaksi seluruh pelanggan hanya tersedia untuk admin. '
+                .'Sebutkan nama pelanggan spesifik yang ingin dicari — saya bantu carikan.';
+        }
+
+        $total = (int) $this->customerQuery()->count();
+
+        if ($total === 0) {
+            return 'Belum ada akun pelanggan yang terdaftar di sistem Agung ATK.';
+        }
+
+        $ranked = $this->customerQuery()
+            ->withCount('orders')
+            ->orderByDesc('orders_count')
+            ->limit(self::MAX_CUSTOMER_LIST)
+            ->get(['id', 'name', 'is_active'])
+            ->filter(fn (User $customer) => (int) $customer->orders_count > 0);
+
+        if ($ranked->isEmpty()) {
+            return 'Belum ada pelanggan dengan pesanan tercatat — peringkat ini akan '
+                .'muncul setelah ada transaksi dari pelanggan.';
+        }
+
+        $lines = ['Pelanggan dengan transaksi (jumlah pesanan) terbanyak:'];
+
+        foreach ($ranked->values() as $index => $customer) {
+            $lines[] = ($index + 1).'. '.$customer->name
+                .' — '.(int) $customer->orders_count.' pesanan'
+                .' ('.((bool) $customer->is_active ? 'aktif' : 'nonaktif').')';
+        }
+
+        $lines[] = 'Dihitung dari seluruh pesanan pelanggan (semua status) langsung di database — '
+            .'bukan perkiraan.';
+
+        return implode("\n", $lines);
     }
 
     /**
@@ -1071,6 +1359,105 @@ class ChatbotDataService
         ) === 1;
     }
 
+    /**
+     * "Produk apa yang stoknya paling banyak?" — peringkat stok (publik).
+     */
+    private function matchesTopStock(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:stok(?:nya)?|persediaan)\b[\s\S]{0,25}\b'
+            .'(?:paling\s+banyak|terbanyak|tertinggi|terbesar|paling\s+tinggi)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:paling\s+banyak|terbanyak|tertinggi)\b[\s\S]{0,20}\b(?:stok|persediaan)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Tampilkan produk terbaru" — produk terakhir ditambahkan (publik).
+     */
+    private function matchesNewestProducts(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:produk|barang|item)\b[\s\S]{0,25}\b'
+            .'(?:terbaru|paling\s+baru|terakhir\s+(?:masuk|ditambahkan|diperbarui)|'
+            .'baru\s+masuk|update\s+terbaru)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:terbaru|paling\s+baru)\b[\s\S]{0,25}\b(?:produk|barang|item)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Berapa jumlah pengguna berdasarkan role?" — HANYA pertanyaan yang
+     * secara eksplisit menyebut pembagian role/peran (kemampuan baru).
+     * Pertanyaan jumlah pengguna generik sengaja TANPA pola di sini agar
+     * tetap dijawab jalur ringkasan operasional lama (kontrak tes lama).
+     */
+    private function matchesUsersByRole(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:pengguna|user|akun)\b[\s\S]{0,40}\b'
+            .'(?:berdasarkan\s+(?:role|peran)|per\s+role|per\s+peran|tiap\s+(?:role|peran)|'
+            .'role\s+mana|peran\s+mana|dibagi\s+(?:role|peran)|dalam\s+(?:role|peran))\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Siapa pengguna terbaru?" — akun terakhir terdaftar (admin).
+     */
+    private function matchesNewestUsers(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:pengguna|user|akun)\b[\s\S]{0,30}\b'
+            .'(?:terbaru|paling\s+baru|terakhir\s+(?:mendaftar|daftar|registrasi|ditambahkan)|'
+            .'baru\s+(?:mendaftar|daftar|registrasi))\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:terbaru|paling\s+baru)\b[\s\S]{0,25}\b(?:pengguna|user|akun)\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Berapa transaksi yang belum dibayar?" — pesanan pending; SENGAJA
+     * diprioritaskan sebelum intent pendapatan agar tidak dijawab omzet.
+     * Pertanyaan pembayaran milik sendiri tetap urusan payment_pending.
+     */
+    private function matchesPendingPayments(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:transaksi|pesanan|order|pembayaran|belanjaan)\b[\s\S]{0,40}\b'
+            .'(?:belum\s+(?:dibayar|bayar|lunas|dikonfirmasi|diverifikasi|diproses)|'
+            .'menunggu\s+(?:pembayaran|verifikasi|konfirmasi)|pending\b)/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:berapa(?:kah)?|brp|jumlah|jml|total|banyak(?:nya)?)\s+'
+            .'(?:yang\s+)?(?:belum\s+(?:dibayar|bayar|lunas))\b/i',
+            $lower
+        ) === 1;
+    }
+
+    /**
+     * "Transaksi/pesanan terbaru apa?" — daftar pesanan terakhir masuk
+     * (bukan milik sendiri; dijaga isPossessive di tempat pemanggilan).
+     */
+    private function matchesNewestOrders(string $lower): bool
+    {
+        return preg_match(
+            '/\b(?:pesanan|order|transaksi)\b[\s\S]{0,30}\b'
+            .'(?:terbaru|paling\s+baru|terakhir\s+(?:masuk|dibuat|dipesan)|'
+            .'yang\s+terakhir\s+masuk|update\s+terakhir)\b/i',
+            $lower
+        ) === 1 || preg_match(
+            '/\b(?:terbaru|paling\s+baru)\b[\s\S]{0,25}\b(?:pesanan|order|transaksi)\b/i',
+            $lower
+        ) === 1;
+    }
+
     private function isPossessive(string $lower): bool
     {
         return preg_match(
@@ -1125,6 +1512,14 @@ class ChatbotDataService
     private function isStaff(?User $user): bool
     {
         return $user !== null && ($user->isAdmin() || $user->isAnggota());
+    }
+
+    /**
+     * Admin saja (dipakai intent daftar akun lintas peran).
+     */
+    private function isAdmin(?User $user): bool
+    {
+        return $user !== null && $user->isAdmin();
     }
 
     /**

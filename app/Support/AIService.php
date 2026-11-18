@@ -62,6 +62,13 @@ class AIService
         'tinta', 'lakban', 'kasir', 'crayon', 'highlighter',
     ];
 
+    /**
+     * Token total dari panggilan API terakhir pada percakapan berjalan
+     * (null = mode lokal / API gagal) — dicatat ke ai_messages.tokens_used.
+     * Diset ulang di setiap buildReply agar tidak bocor antar-pesan.
+     */
+    private ?int $lastApiTokens = null;
+
     public function __construct(
         private readonly ChatGuard $guard,
         private readonly DatabaseKnowledgeService $knowledge,
@@ -92,6 +99,11 @@ class AIService
                 'content' => $reply,
             ]);
 
+            // Catat pemakaian token API pada balasan ini (mode lokal tetap null).
+            if ($this->lastApiTokens !== null) {
+                $assistant->update(['tokens_used' => $this->lastApiTokens]);
+            }
+
             // Judul percakapan diambil dari pesan pertama
             if ($conversation->title === 'Percakapan Baru') {
                 $conversation->title = mb_substr(trim($message), 0, 60) ?: 'Percakapan Baru';
@@ -107,6 +119,9 @@ class AIService
      */
     private function buildReply(AiConversation $conversation, string $message, ?User $user): string
     {
+        // Token API bersih untuk setiap pesan — diisi ulang bila askApi sukses.
+        $this->lastApiTokens = null;
+
         // 1. Pagaran INPUT — pemeriksaan privasi SEBELUM model menghasilkan jawaban.
         //    Pertanyaan privasi tidak pernah sampai ke model (hemat kuota & menutup
         //    jalur manipulasi) dan dijawab dengan respons tetap yang konsisten.
@@ -395,6 +410,11 @@ class AIService
 
             $reply = trim((string) $response->json('choices.0.message.content'));
 
+            // Pemakaian token provider (bila disertakan) dicatat untuk
+            // riwayat biaya — tanpa menyimpan isi/badan respons apa pun.
+            $usageTokens = $response->json('usage.total_tokens');
+            $this->lastApiTokens = is_numeric($usageTokens) ? (int) $usageTokens : null;
+
             $this->recordApiStatus(true, $response->status());
 
             return $reply !== '' ? $reply : null;
@@ -608,6 +628,25 @@ class AIService
      */
     private function databaseContextArray(?User $user): array
     {
+        // Ringkasan tabel publik — JUMLAH AKUN PENGGUNA tidak ikut di sini:
+        // data akun bukan konsumsi publik (tamu/pelanggan/kurir tidak perlu
+        // mengetahuinya). Staf menerima lewat blok statistik / jawaban data.
+        $ringkasan = [
+            'roles' => Role::count(),
+            'categories' => Category::count(),
+            'products' => Product::count(),
+            'products_aktif' => Product::where('is_active', true)->count(),
+            'addresses' => Address::count(),
+            'orders' => Order::count(),
+            'payments' => Payment::count(),
+            'shipments' => Shipment::count(),
+            'reviews' => Review::count(),
+        ];
+
+        if ($user !== null && ($user->isAdmin() || $user->isAnggota())) {
+            $ringkasan = ['users' => User::count()] + $ringkasan;
+        }
+
         $context = [
             'user' => [
                 'nama' => $user?->name,
@@ -615,18 +654,7 @@ class AIService
                 'peran' => $user?->role?->name ?? 'tamu',
                 'login' => $user !== null,
             ],
-            'ringkasan_tabel' => [
-                'users' => User::count(),
-                'roles' => Role::count(),
-                'categories' => Category::count(),
-                'products' => Product::count(),
-                'products_aktif' => Product::where('is_active', true)->count(),
-                'addresses' => Address::count(),
-                'orders' => Order::count(),
-                'payments' => Payment::count(),
-                'shipments' => Shipment::count(),
-                'reviews' => Review::count(),
-            ],
+            'ringkasan_tabel' => $ringkasan,
             'kategori' => Category::withCount(['products' => fn ($q) => $q->where('is_active', true)])->get()
                 ->map(fn (Category $c) => [
                     'nama' => $c->name,
@@ -815,6 +843,15 @@ class AIService
             $scopedRole = $user->role?->name;
         }
 
+        // 1d. Data aktual database (PROMPT 8) — diprioritaskan SEBELUM jawaban
+        //     role/peta sistem: pertanyaan berisi angka ("pengguna berdasarkan
+        //     role", "transaksi belum dibayar") harus dijawab dari query
+        //     read-only terotorisasi, bukan penjelasan peran umum. Sudah
+        //     dihitung backend; tanpa SQL bebas & tanpa mengarang angka.
+        if ($dataAnswer !== null && $dataAnswer !== '') {
+            return $dataAnswer;
+        }
+
         // 2. Aktor/role & tugas masing-masing (role NYATA dari database)
         if ($this->profile->isActorQuestion($lower)) {
             return $this->profile->actorReply($scopedRole);
@@ -830,14 +867,6 @@ class AIService
         $structure = $this->schemaStructureReply($message, $lower);
         if ($structure !== null) {
             return $structure;
-        }
-
-        // 5. Data aktual database (PROMPT 8) — intent baca-data terotorisasi,
-        //    read-only: jumlah produk, stok menipis, terlaris, pendapatan/jumlah
-        //    pesanan, tracking milik sendiri, lookup nomor pesanan. Sudah dihitung
-        //    backend; tanpa SQL bebas & tanpa mengarang angka.
-        if ($dataAnswer !== null && $dataAnswer !== '') {
-            return $dataAnswer;
         }
 
         // 6. Aturan bisnis transaksi (diverifikasi dari kode)
