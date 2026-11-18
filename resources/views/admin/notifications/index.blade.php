@@ -179,7 +179,7 @@
                         <span class="text-body-secondary">Webhook Fonnte (tempel ke dashboard Fonnte):</span>
                         @if ($integration['whatsapp']['fonnte_webhook_url'] !== null)
                             <code class="d-block text-break">{{ $integration['whatsapp']['fonnte_webhook_url'] }}</code>
-                            <span class="text-body-secondary">Wajib HTTPS publik pada produksi (atur APP_URL domain Anda).</span>
+                            <span class="text-body-secondary">Wajib HTTPS publik pada produksi (atur WEBHOOK_PUBLIC_URL & APP_URL domain Anda).</span>
                         @else
                             <span class="text-warning-emphasis">FONNTE_WEBHOOK_SECRET belum diisi.</span>
                         @endif

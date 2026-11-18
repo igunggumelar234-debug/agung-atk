@@ -65,3 +65,95 @@ jobs:
 
       - name: Build aset frontend
         run: npm run build
+
+      - name: Unggah aset build untuk job deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: public/build
+          retention-days: 1
+
+  deploy:
+    # Deploy OTOMATIS hanya bila secrets berikut tersedia di repository
+    # (Settings -> Secrets and variables -> Actions):
+    #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+    # Tanpa secrets, job tetap berjalan tetapi SELURUH langkah deploy
+    # dilewati dengan pesan jelas — pipeline tidak pernah gagal karena
+    # hosting belum disiapkan.
+    name: Deploy Produksi (opsional)
+    needs: [tests, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Unduh aset build frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: public/build
+
+      - name: Cek kesiapan secrets deploy
+        id: ready
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -n "${DEPLOY_HOST}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Secrets deploy tersedia — melanjutkan ke VPS."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "DEPLOY_HOST belum diatur — langkah deploy DILEWATI (bukan kegagalan)."
+          fi
+
+      - name: Salin berkas ke VPS (rsync tanpa menimpa .env)
+        if: steps.ready.outputs.ready == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'node_modules' \
+            --exclude 'vendor' \
+            --exclude 'storage/app' \
+            --exclude 'storage/framework' \
+            --exclude 'storage/logs' \
+            --exclude 'storage/session' \
+            --exclude 'bootstrap/cache' \
+            --exclude '.phpunit.result.cache' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
+
+      - name: Pasca-deploy di VPS (migrasi, optimasi, restart layanan)
+        if: steps.ready.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+            composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+            php artisan migrate --force
+            php artisan optimize:clear
+            php artisan optimize
+            chown -R www-data:www-data storage bootstrap/cache
+            systemctl restart agung-atk-worker agung-atk-scheduler || \
+              echo "Unit systemd belum terpasang — worker dijalankan manual."

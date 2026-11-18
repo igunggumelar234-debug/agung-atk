@@ -48,6 +48,20 @@ class NotificationSettingsTest extends TestCase
         }
     }
 
+    public function test_webhook_urls_use_configured_public_root_when_set(): void
+    {
+        config()->set('app.webhook_public_url', 'https://contoh.test');
+
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/notifications')
+            ->assertStatus(200);
+
+        // URL webhook dibangun dari WEBHOOK_PUBLIC_URL — bukan host yang
+        // sedang dibuka admin (http://localhost pada lingkungan tes).
+        $response->assertSee('https://contoh.test/webhooks/whatsapp');
+        $response->assertDontSee('http://localhost/webhooks/whatsapp');
+    }
+
     public function test_settings_page_shows_configuration_status_without_leaking_secrets(): void
     {
         // Kredensial rahasia disuntikkan ke konfigurasi — halaman tidak boleh menampilkannya.

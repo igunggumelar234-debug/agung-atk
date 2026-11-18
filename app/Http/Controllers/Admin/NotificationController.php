@@ -400,6 +400,26 @@ class NotificationController extends Controller
     }
 
     /**
+     * URL absolut untuk webhook yang didaftarkan ke penyedia luar.
+     *
+     * Bila WEBHOOK_PUBLIC_URL diisi (root HTTPS publik produksi), seluruh
+     * URL webhook dibangun dari root itu — konsisten walau admin membuka
+     * dashboard lewat host/IP lain. Tanpa konfigurasi, mengikuti host
+     * request saat ini (perilaku lama; dipertahankan agar tes yang ada
+     * tidak berubah).
+     */
+    private function publicUrl(string $routeName, array $parameters = []): string
+    {
+        $root = rtrim((string) config('app.webhook_public_url'), '/');
+
+        if ($root !== '') {
+            return $root.route($routeName, $parameters, false);
+        }
+
+        return route($routeName, $parameters);
+    }
+
+    /**
      * Data integrasi kanal chatbot untuk dashboard (tanpa rahasia).
      *
      * @return array<string, mixed>
@@ -422,13 +442,14 @@ class NotificationController extends Controller
                 // yang login) — penerima lain pada riwayat tetap tersamarkan.
                 'admin_number' => (string) config('notifications.admin_phone'),
                 'message_mode' => (string) config('services.whatsapp.message_mode'),
-                'webhook_url' => route('webhooks.whatsapp.receive'),
-                'verify_url' => route('webhooks.whatsapp.verify'),
+                'webhook_url' => $this->publicUrl('webhooks.whatsapp.receive'),
+                'verify_url' => $this->publicUrl('webhooks.whatsapp.verify'),
                 // URL webhook Fonnte (secret di path) — hanya untuk provider
                 // fonnte; dipakai admin saat mengatur Webhook URL di dashboard
-                // Fonnte. Di produksi dibangun dari APP_URL (HTTPS publik).
+                // Fonnte. Di produksi dibangun dari WEBHOOK_PUBLIC_URL/APP_URL
+                // (HTTPS publik) — bukan host yang sedang dibuka admin.
                 'fonnte_webhook_url' => filled(config('services.fonnte.webhook_secret'))
-                    ? route('webhooks.fonnte.receive', [
+                    ? $this->publicUrl('webhooks.fonnte.receive', [
                         'token' => (string) config('services.fonnte.webhook_secret'),
                     ])
                     : null,
@@ -447,7 +468,7 @@ class NotificationController extends Controller
                 'chat_id' => config('services.telegram.admin_chat_id')
                     ?: config('services.telegram.chat_id'),
                 'webhook_secret_set' => filled(config('services.telegram.webhook_secret')),
-                'webhook_url' => route('webhooks.telegram.receive'),
+                'webhook_url' => $this->publicUrl('webhooks.telegram.receive'),
                 'last_webhook_at' => Cache::get('chatbot.webhook.last_telegram'),
                 'test' => is_array($test) ? ($test['telegram'] ?? null) : null,
                 'last_sent' => $this->latestChannelLog('telegram'),

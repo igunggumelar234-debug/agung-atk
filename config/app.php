@@ -75,6 +75,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Webhook Public URL
+    |--------------------------------------------------------------------------
+    |
+    | Root HTTPS publik (tanpa path) untuk membangun URL webhook yang
+    | didaftarkan ke penyedia luar (Fonnte, Meta, Telegram) — mis.
+    | https://domain-anda.example. Kosongkan agar URL mengikuti host
+    | request seperti biasa. Di produksi WAJIB diisi HTTPS agar URL
+    | webhook tidak pernah menunjuk localhost/IP internal.
+    |
+    */
+
+    'webhook_public_url' => env('WEBHOOK_PUBLIC_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
