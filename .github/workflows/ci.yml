@@ -45,7 +45,21 @@ jobs:
         run: php artisan migrate --force
 
       - name: Jalankan unit & feature test
-        run: php artisan test --compact
+        run: |
+          set -o pipefail
+          php artisan test --compact 2>&1 | tee test-output.txt
+
+      - name: Laporkan kegagalan sebagai anotasi (terbaca via API publik)
+        if: failure()
+        run: |
+          echo "::error::CI gagal pada langkah tes. Ekstensi PHP runner: $(php -m | tr '\n' ' ')"
+          grep -E '^[0-9]+\) |Failed asserting|ErrorException|Error:' test-output.txt 2>/dev/null \
+            | head -30 | while IFS= read -r line; do
+                echo "::error::${line}"
+              done
+          tail -5 test-output.txt 2>/dev/null | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
 
   frontend:
     name: Frontend Build (Vite)
