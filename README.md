@@ -19,7 +19,7 @@ sehingga aplikasi berjalan tanpa intervensi manual setelah prasyarat di bawah te
 | Kelompok | `[KELOMPOK]` |
 | Tema Topik Kelompok | `[Sistem Informasi Berbasis Web untuk Pemberdayaan UMKM Cerdas]` |
 | Mata Kuliah | Rekayasa Perangkat Lunak (TIKB2503021) — STMIK IKMI Cirebon |
-| Repository | `[URL REPOSITORY GITHUB]` |
+| Repository | [`https://github.com/igunggumelar234-debug/agung-atk`](https://github.com/igunggumelar234-debug/agung-atk) |
 
 > Placeholder `[...]` sengaja belum diisi — jangan mengarang identitas/tautan.
 
@@ -56,7 +56,7 @@ pembayaran & verifikasi · pengiriman berjenjang (admin→kurir) · laporan + ek
 audit log · tema terang/gelap · halaman error ramah · backup database.
 
 **Fitur AI (yang benar-benar diimplementasikan).**
-- **Chatbot berlapis:** pagaran input (`ChatGuard`) → perintah lokal (`/menu`, `/stok`, `/pesanan`, `/lacak`, …) → **intent data read-only** diskop per role → provider LLM → pagaran output; identitas dari role session; jawaban fallback jujur bila API AI tidak tersedia; multi-bahasa.
+- **Chatbot berlapis:** pagaran input (`ChatGuard`) → perintah lokal (`/menu`, `/stok`, `/pesanan`, `/lacak`, …) → **intent data read-only** diskop per role → provider LLM → pagaran output; identitas dari role session; **konteks antar-pesan** (pertanyaan lanjutan: "lanjut", "kalau kategori X?"); normalisasi bahasa sehari-hari (akhiran `-nya`, sinonim); jawaban fallback jujur bila API AI tidak tersedia; multi-bahasa.
 - **Pencarian produk lewat foto:** deteksi objek **YOLOv8** (model dilatih sendiri, `ai-service/`) dengan fallback otomatis; hasil wajar: saran produk, "Barang Tidak Sesuai Kriteria Toko", atau "Stok Kosong".
 - **Bukan** klaim: RAG, vector database, atau model berjalan lokal (lihat PRD §19.7).
 
@@ -150,7 +150,7 @@ Kunci API/hanya diisi **setelah** `.env` terbentuk — jangan pernah menaruhnya 
 
 ```bash
 # Buat database MySQL dulu, lalu sesuaikan DB_* di .env
-php artisan migrate              # 25 migration (roles, users, produk, pesanan, audit, notifikasi, kanal, dst.)
+php artisan migrate              # 26 migration (roles, users, produk, pesanan, audit, notifikasi, kanal, dst.)
 php artisan db:seed              # seluruh seeder (RoleSeeder, UserSeeder, produk, pesanan contoh)
 ```
 
@@ -514,9 +514,10 @@ vendor/bin/pint --dirty --format agent                 # format kode setelah edi
 
 Hasil verifikasi terakhir:
 
-* **PHPUnit: 645/645 tes lulus (3.050 asersi)** — 18 November 2026 (`php artisan test --compact`),
+* **PHPUnit: 702/702 tes lulus (3.311 asersi)** — 19 November 2026 (`php artisan test --compact`),
   mencakup otomasi stok, pembatalan anti-double-restore, proteksi checkout ganda, audit bisnis,
-  halaman error, seluruh chatbot (identitas/perintah/intent data/webhook), notifikasi, dan pencarian gambar YOLO.
+  halaman error, seluruh chatbot (identitas/perintah/intent data/webhook/**bahasa alami & konteks antar-pesan**),
+  notifikasi, dan pencarian gambar YOLO.
 * **E2E audit (server hidup): 115/115 cek lulus, 0 broken link** — crawl semua halaman
   untuk 4 peran + tamu, marker error, RBAC 403, halaman 404 ramah, kartu pembatalan.
 * **Pint:** `vendor/bin/pint --test` lolos seluruh repo · **Nama route:** 0 duplikat.
@@ -550,17 +551,19 @@ Agar tidak menyesatkan — komponen yang **belum tentu aktif** di lingkungan And
    selalu manual + persetujuan (aturan: jangan menjalankan migrasi destruktif
    atau menghapus data produksi tanpa izin).
 
-### Status Integrasi Terkini (jujur — 17 November 2026)
+### Status Integrasi Terkini (jujur — 19 November 2026)
 
 | Integrasi | Status | Keterangan |
 |---|---|---|
 | Email (SMTP) | ✅ Teruji nyata | Uji kirim dari halaman admin → diterima Mailpit |
 | Telegram — pengiriman | ✅ Teruji nyata | `getMe` sukses: bot `AGUNGATK_bot` |
 | Telegram — webhook masuk | ⏸️ Menunggu | Keputusan username bot + URL HTTPS publik |
-| WhatsApp Cloud API | ⏸️ Menunggu | Mekanisme lengkap teruji mock; kredensial Meta diperlukan |
-| Chatbot mode API (LLM) | ⏸️ Menunggu | Kunci saat ini ditolak 401 → mode lokal aktif & teruji |
+| WhatsApp (Fonnte) | ✅ Aktif | Provider `WHATSAPP_PROVIDER=fonnte`, pesan terkirim (log id 19) — konfirmasi terima di HP admin menyusul |
+| WhatsApp Cloud API (Meta) | ⏸️ Menunggu | Mekanisme lengkap teruji mock; kredensial Meta diperlukan |
+| Chatbot mode API (LLM) | ⏸️ Menunggu | Endpoint `AI_URL` mengembalikan **410 Gone** (19 Nov) → mode lokal aktif & teruji; ganti endpoint/kunci agar mode API hidup |
+| Chatbot data & konteks | ✅ Aktif | 35 intent read-only + konteks antar-pesan, teruji 231 tes (12 tes wajib bahasa alami) |
 | YOLOv8 (pencarian gambar) | ✅ Aktif | `ai-service/server.py` port 8090, model terlatih |
-| GitHub Actions | ⏸️ Menunggu push | Workflow siap di `.github/workflows/ci.yml` |
+| GitHub Actions | ✅ Aktif | CI (PHPUnit + Pint + build Vite) hijau otomatis tiap push — run #4–#7 sukses (19 Nov 2026) |
 
 ---
 
@@ -586,6 +589,8 @@ Agar tidak menyesatkan — komponen yang **belum tentu aktif** di lingkungan And
 | [`docs/CHATBOT_DATABASE_KNOWLEDGE.md`](docs/CHATBOT_DATABASE_KNOWLEDGE.md) | Struktur database untuk chatbot + pembaruan pengetahuan |
 | [`docs/CHATBOT_SECURITY.md`](docs/CHATBOT_SECURITY.md) | Pagar keamanan & privasi chatbot |
 | [`docs/CHATBOT_USER_IDENTITY.md`](docs/CHATBOT_USER_IDENTITY.md) | Identitas pengguna login & pencarian akun pelanggan per role |
+| [`CHATBOT_AUDIT_REPORT.md`](CHATBOT_AUDIT_REPORT.md) | Audit & perbaikan chatbot AI: penyebab, file diperbaiki, 12 tes wajib, kendala |
+| [`CHATBOT_DATABASE_MAPPING.md`](CHATBOT_DATABASE_MAPPING.md) | Pemetaan intent chatbot → tabel/kolom/query + hak akses per role |
 
 ---
 
@@ -613,15 +618,15 @@ app/Jobs/                 SendChannelReplyJob (balasan chatbot via kanal, retry 
 app/Models/               Order, Payment, Shipment, Product, User, ActivityLog, ChannelIdentity, ...
 app/Support/              AIService, ChatGuard, ChatbotDataService, ChatbotProfile,
                           DatabaseKnowledgeService, WorkflowKnowledge, CartSession, ShipmentStatus
-database/migrations/      25 migration (termasuk role, audit, notifikasi, kanal chatbot)
+database/migrations/      26 migration (termasuk role, audit, notifikasi, kanal chatbot)
 resources/views/          layouts, admin/, anggota/, courier/, errors/ (halaman error ramah)
-routes/web.php            111 route (publik + per peran)
+routes/web.php            118 route (publik + per peran)
 routes/console.php        scheduler (ringkasan harian + pruning)
 ai-service/               layanan Python YOLOv8 (server.py, train.py, model terlatih)
 docs/                     PRD/SRS, SDD+UML, audit, testing/CI-CD, panduan video, laporan akhir
 deploy/                   contoh Supervisor, systemd, crontab untuk produksi
 scripts/                  backup database (bash + PowerShell)
-tests/                    41 file — 645 tes fitur & unit
+tests/                    46 file — 702 tes fitur & unit
 .github/workflows/        ci.yml (PHPUnit + Pint + build Vite)
 ```
 
