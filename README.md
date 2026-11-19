@@ -14,10 +14,10 @@ sehingga aplikasi berjalan tanpa intervensi manual setelah prasyarat di bawah te
 
 | | |
 |---|---|
-| Nama Mahasiswa | `[NAMA MAHASISWA]` |
-| NIM | `[NIM]` |
+| Nama Mahasiswa | `[INDRA AGUNG GUMELAR]` |
+| NIM | `[41257109]` |
 | Kelompok | `[KELOMPOK]` |
-| Tema Topik Kelompok | `[TEMA TOPIK]` |
+| Tema Topik Kelompok | `[Sistem Informasi Berbasis Web untuk Pemberdayaan UMKM Cerdas]` |
 | Mata Kuliah | Rekayasa Perangkat Lunak (TIKB2503021) — STMIK IKMI Cirebon |
 | Repository | `[URL REPOSITORY GITHUB]` |
 
